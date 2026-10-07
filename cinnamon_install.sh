@@ -104,6 +104,8 @@ clear
 echo "Install XORG/Cinnamon-all... / Instalando XORG/Cinnamon-all..."
 sudo xbps-install -y xorg
 sudo xbps-install -y octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal-gtk xdg-user-dirs xdg-user-dirs-gtk xdg-utils
+# Install extra tools required for theme/icon extraction (.deb helpers & xz)
+sudo xbps-install -y wget binutils xz hicolor-icon-theme
 sleep 1
 
 # Printer support / Suporte a impressoras
@@ -140,37 +142,71 @@ echo "Install Software... / Instalando softwares..."
 sudo xbps-install -y firefox gnome-terminal firefox-i18n-pt-BR
 sleep 1
 
-# Create a script that sets keyboard layout after login (Vanilla theme preserved)
-# Criar um script que define o layout de teclado após o login (Mantendo o tema Vanilla)
-echo "Creating autostart script for keyboard layout settings..."
+# Download and install Linux Mint Themes, Icons, and Cursors for the user
+echo "Downloading and installing Linux Mint themes, icons, and cursors..."
+mkdir -p ~/.themes ~/.icons
+
+# 1. Mint-Themes (v2.4.2)
+wget -q http://packages.linuxmint.com/pool/main/m/mint-themes/mint-themes_2.4.2_all.deb
+ar x mint-themes_2.4.2_all.deb
+tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/themes/*'
+mv usr/share/themes/* ~/.themes/
+rm -rf usr data.tar.xz control.tar.xz debian-binary mint-themes_2.4.2_all.deb
+
+# 2. Mint-Y-Icons (v1.9.6)
+wget -q http://packages.linuxmint.com/pool/main/m/mint-y-icons/mint-y-icons_1.9.6_all.deb
+ar x mint-y-icons_1.9.6_all.deb
+tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/icons/*'
+mv usr/share/icons/* ~/.icons/
+rm -rf usr data.tar.xz control.tar.xz debian-binary mint-y-icons_1.9.6_all.deb
+
+# 3. Mint-Cursor-Themes (v1.0.2)
+wget -q http://packages.linuxmint.com/pool/main/m/mint-cursor-themes/mint-cursor-themes_1.0.2_all.deb
+ar x mint-cursor-themes_1.0.2_all.deb
+tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/icons/*'
+mv usr/share/icons/* ~/.icons/
+rm -rf usr data.tar.xz control.tar.xz debian-binary mint-cursor-themes_1.0.2_all.deb
+
+# Create a script that sets keyboard layout, styling, and clock format after login
+echo "Creating autostart script for custom settings..."
 cat <<EOL > /home/$USER/set-keyboard.sh
 #!/bin/bash
-# Set pt_BR keyboard layout on session start
-# Definir layout de teclado pt_BR no início da sessão
+# Set pt_BR keyboard layout, Mint-Y-Dark theme, and custom clock format on session start
 gsettings set org.cinnamon.desktop.input-sources sources "[('xkb', 'br')]"
 gsettings set org.cinnamon.desktop.background picture-uri 'file:///usr/share/backgrounds/cinnamon_background.jpg'
 
+# Apply Mint-Y-Dark theme settings
+gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark'
+gsettings set org.cinnamon.desktop.wm.preferences theme 'Mint-Y-Dark'
+gsettings set org.cinnamon.theme name 'Mint-Y-Dark'
+gsettings set org.cinnamon.desktop.interface icon-theme 'Mint-Y'
+gsettings set org.cinnamon.desktop.interface cursor-theme 'Mint-Y'
+gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+
+# Configure clock applet format (Time with seconds on top, date on bottom)
+gsettings set org.cinnamon.desktop.interface clock-use-24h true
+gsettings set org.cinnamon.desktop.interface clock-show-seconds true
+gsettings set org.cinnamon.muffin.window-picker-style custom-format
+# Note: Custom date/time format for applet
+gsettings set org.cinnamon.desktop.interface clock-custom-format '%H:%M:%S\\n%d/%m/%Y'
+
 # Delete autostart entry after first execution
-# Excluir a entrada de autostart após a primeira execução
 rm -f ~/.config/autostart/set-keyboard.desktop
 
-# Print message that script is finished
-# Exibir mensagem de que o script foi concluído
-echo "Keyboard layout and background have been set."
+echo "Custom configurations have been applied."
 EOL
 
 # Make script executable / Tornar o script executável
 chmod +x /home/$USER/set-keyboard.sh
 
 # Create autostart file that executes the script
-# Criar arquivo de autostart que executa o script
 mkdir -p ~/.config/autostart
 cat <<EOL > ~/.config/autostart/set-keyboard.desktop
 [Desktop Entry]
 Type=Application
 Exec=/home/$USER/set-keyboard.sh
-Name=Set Keyboard Layout
-Comment=Set the default keyboard layout after login
+Name=Set Mint Customization and Keyboard
+Comment=Set the default keyboard layout, Mint themes, and clock format after login
 X-GNOME-Autostart-enabled=true
 EOL
 
@@ -221,7 +257,6 @@ sudo ln -s /etc/sv/lightdm/ /var/service/
 sleep 1
 
 # Configure LightDM background (Vanilla greeter)
-# Configurar plano de fundo do LightDM (Greeter padrão)
 echo "background=/usr/share/backgrounds/lightdmbackground.jpg" | sudo tee -a /etc/lightdm/lightdm-gtk-greeter.conf > /dev/null
 
 # Setup Autostart - pipewire & wireplumber / Configurar autostart do PipeWire e WirePlumber
@@ -230,8 +265,6 @@ sudo mkdir -p /etc/pipewire/pipewire.conf.d
 sudo ln -s /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pipewire.conf.d/
 sudo ln -s /usr/share/examples/pipewire/20-pipewire-pulse.conf /etc/pipewire/pipewire.conf.d/
 
-# Do not uncomment or pipewire stops working! / Não remova o comentário ou o pipewire para de funcionar!
-# sudo ln -s /usr/share/applications/wireplumber.desktop /etc/xdg/autostart/
 sudo ln -s /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
 sleep 1
 clear
@@ -243,4 +276,4 @@ echo "pt_BR.UTF-8" > "$HOME/.config/user-dirs.locale"
 sudo cp ~/void/10-mount-drives.rules /etc/polkit-1/rules.d/
 clear
 echo "Setup finished - please reboot / Script de configuração finalizado - o sistema já pode ser reiniciado"
-echo "Use sudo reboot / Use sudo reboot"
+echo "Use sudo reboot"

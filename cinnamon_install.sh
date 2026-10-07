@@ -47,7 +47,7 @@ echo "Install nano... / Instalando nano..."
 sudo xbps-install -y nano
 sleep 1
 
-# Network & Authentication / Rede e Autenticação (NetworkManager, polkit, gnome-keyring e remoção de conflitos)
+# Network & Authentication / Rede e Autenticação
 clear
 echo "Install NetworkManager, polkit and gnome-keyring / Instalando NetworkManager, polkit e gnome-keyring"
 sudo xbps-install -y NetworkManager polkit gnome-keyring
@@ -81,7 +81,7 @@ echo "Install pipewire, wireplumber, pavucontrol, pulsemixer / Instalando pipewi
 sudo xbps-install -y pipewire wireplumber pavucontrol pulsemixer libspa-bluetooth blueman bluez-cups
 sleep 1
 
-# Install NVIDIA-driver / Instalar driver NVIDIA (Intel + GeForce 930MX)
+# Install NVIDIA-driver / Instalar driver NVIDIA
 clear
 echo "Available NVIDIA drivers (Intel + GeForce 930MX):"
 echo "1) Latest NVIDIA driver (nvidia) / Driver mais recente"
@@ -111,7 +111,6 @@ clear
 echo "Install XORG/Cinnamon-all... / Instalando XORG/Cinnamon-all..."
 sudo xbps-install -y xorg
 sudo xbps-install -y octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal-gtk xdg-user-dirs xdg-user-dirs-gtk xdg-utils
-# Install extra tools required for theme/icon extraction (.deb helpers & xz)
 sudo xbps-install -y wget binutils xz hicolor-icon-theme
 sleep 1
 
@@ -127,7 +126,6 @@ sleep 1
 clear
 echo "Installing additional tools... / Instalando ferramentas adicionais..."
 sudo xbps-install -y exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez
-# Activate bluetoothd / Ativar bluetoothd
 sudo ln -s /etc/sv/bluetoothd /var/service/
 sleep 1
 
@@ -143,11 +141,62 @@ echo "Install Fonts... / Instalando fontes..."
 sudo xbps-install -y noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
 sleep 1
 
-# Software / Softwares essenciais
+# Software / Softwares essenciais e novos pacotes solicitados
 clear
 echo "Install Software... / Instalando softwares..."
-sudo xbps-install -y firefox xfce4-terminal firefox-i18n-pt-BR
+sudo xbps-install -y firefox xfce4-terminal firefox-i18n-pt-BR gnome-calendar qalculate-gtk smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx
 sleep 1
+
+# Variável de ambiente QT
+echo "Configurando variável QT_QPA_PLATFORMTHEME..."
+echo "QT_QPA_PLATFORMTHEME=qt5ct" | sudo tee -a /etc/environment > /dev/null
+
+# Configuração do XFCE Terminal
+echo "Configurando perfil visual do xfce4-terminal..."
+mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml
+cat << 'EOF' > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml
+<?xml version="1.1" encoding="UTF-8"?>
+
+<channel name="xfce4-terminal" version="1.0">
+  <property name="background-mode" type="string" value="TERMINAL_BACKGROUND_TRANSPARENT"/>
+  <property name="background-darkness" type="double" value="0"/>
+  <property name="font-name" type="string" value="DejaVu Sans Mono Bold 12"/>
+  <property name="cell-height-scale" type="double" value="1"/>
+  <property name="color-selection-use-default" type="bool" value="false"/>
+  <property name="color-bold-use-default" type="bool" value="false"/>
+  <property name="color-selection" type="string" value="#0000aaaa0000"/>
+  <property name="color-bold" type="string" value="#aaaa00000000"/>
+  <property name="color-use-theme" type="bool" value="true"/>
+  <property name="misc-cursor-shape" type="string" value="TERMINAL_CURSOR_SHAPE_IBEAM"/>
+  <property name="misc-cursor-blinks" type="bool" value="true"/>
+  <property name="misc-show-unsafe-paste-dialog" type="bool" value="false"/>
+  <property name="color-palette" type="string" value="rgb(0,0,0);rgb(170,0,0);rgb(0,170,0);rgb(170,85,0);rgb(0,0,170);rgb(170,0,170);rgb(0,170,170);rgb(170,170,170);rgb(85,85,85);rgb(255,85,85);rgb(85,255,85);rgb(255,255,85);rgb(85,85,255);rgb(255,85,255);rgb(85,255,255);rgb(255,255,255)"/>
+</channel>
+EOF
+
+# Scroll Lock Nativo X11
+echo "Ativando Scroll Lock nativo no X11..."
+sudo mkdir -p /etc/X11/xorg.conf.d
+sudo tee /etc/X11/xorg.conf.d/30-scrolllock.conf > /dev/null << 'EOF'
+Section "InputClass"
+    Identifier "system-keyboard"
+    MatchIsKeyboard "on"
+    Option "XkbLayout" "br"
+    Option "XkbVariant" "abnt2"
+    Option "XkbOptions" "scrolllock:mod3"
+EndSection
+EOF
+
+# Autostart NumLock Cinnamon
+echo "Criando entrada de inicialização do NumLock para o Cinnamon..."
+mkdir -p ~/.config/autostart
+cat << 'EOF' > ~/.config/autostart/numlockx.desktop
+[Desktop Entry]
+Type=Application
+Name=NumLock
+Exec=numlockx on
+X-GNOME-Autostart-enabled=true
+EOF
 
 # Download and install Linux Mint Themes, Icons, and Cursors for the user
 echo "Downloading and installing Linux Mint themes, icons, and cursors..."
@@ -194,20 +243,16 @@ gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
 gsettings set org.cinnamon.desktop.interface clock-use-24h true
 gsettings set org.cinnamon.desktop.interface clock-show-seconds true
 gsettings set org.cinnamon.muffin.window-picker-style custom-format
-# Note: Custom date/time format for applet
 gsettings set org.cinnamon.desktop.interface clock-custom-format '%H:%M:%S\\n%d/%m/%Y'
 
 # Delete autostart entry after first execution
 rm -f ~/.config/autostart/set-keyboard.desktop
-
 echo "Custom configurations have been applied."
 EOL
 
-# Make script executable / Tornar o script executável
 chmod +x /home/$USER/set-keyboard.sh
 
 # Create autostart file that executes the script
-mkdir -p ~/.config/autostart
 cat <<EOL > ~/.config/autostart/set-keyboard.desktop
 [Desktop Entry]
 Type=Application
@@ -217,7 +262,7 @@ Comment=Set the default keyboard layout, Mint themes, and clock format after log
 X-GNOME-Autostart-enabled=true
 EOL
 
-# Create .desktop file for octoxbps-notifier / Criar arquivo .desktop para o octoxbps-notifier
+# Create .desktop files
 cat > ~/.config/autostart/octoxbps-notifier.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -229,7 +274,6 @@ Name=OctoXBPS Notifier
 Comment=Start OctoXBPS Update Notifier automatically
 EOL
 
-# Create .desktop file for brazilian keyboard / Criar arquivo .desktop para teclado brasileiro
 cat > ~/.config/autostart/x11kb-brazil.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -241,7 +285,6 @@ Name=X11-KB-Brazil
 Comment=Activate Brazilian keyboard under X11
 EOL
 
-# Create .desktop file for automount script (udisks2) / Criar arquivo .desktop para o script de automount
 cat > ~/.config/autostart/automount-udisks2.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -253,7 +296,6 @@ Name=X11-automount-udisks2
 Comment=Automount script for udisks2
 EOL
 
-# Autostart script created. Script finished.
 echo "Autostart script created. Script finished."
 
 # Login manager / Gerenciador de login
@@ -263,15 +305,32 @@ sudo xbps-install -y lightdm lightdm-gtk-greeter
 sudo ln -s /etc/sv/lightdm/ /var/service/
 sleep 1
 
-# Configure LightDM background (Vanilla greeter)
-echo "background=/usr/share/backgrounds/lightdmbackground.jpg" | sudo tee -a /etc/lightdm/lightdm-gtk-greeter.conf > /dev/null
+# Configure LightDM background and Mint-Y-Dark Theme
+sudo tee -a /etc/lightdm/lightdm-gtk-greeter.conf > /dev/null << 'EOF'
+background=/usr/share/backgrounds/lightdmbackground.jpg
+theme-name=Mint-Y-Dark
+icon-theme-name=Mint-Y
+EOF
+
+# Configuração unificada do LightDM Greeter para Scroll Lock e NumLock
+echo "Configurando script de inicialização do LightDM..."
+sudo tee /usr/local/bin/lightdm-greeter-setup.sh > /dev/null << 'EOF'
+#!/bin/bash
+/usr/bin/setxkbmap -option scrolllock:mod3
+/usr/bin/numlockx on
+EOF
+sudo chmod +x /usr/local/bin/lightdm-greeter-setup.sh
+
+sudo mkdir -p /etc/lightdm/lightdm.conf.d
+sudo tee /etc/lightdm/lightdm.conf.d/60-custom-greeter.conf > /dev/null << 'EOF'
+[Seat:*]
+greeter-setup-script=/usr/local/bin/lightdm-greeter-setup.sh
+EOF
 
 # Setup Autostart - pipewire & wireplumber / Configurar autostart do PipeWire e WirePlumber
 sudo mkdir -p /etc/pipewire/pipewire.conf.d
-
 sudo ln -s /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pipewire.conf.d/
 sudo ln -s /usr/share/examples/pipewire/20-pipewire-pulse.conf /etc/pipewire/pipewire.conf.d/
-
 sudo ln -s /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
 sleep 1
 clear
@@ -279,7 +338,7 @@ clear
 # Activate Brazilian locale / Ativar localidade pt_BR
 echo "pt_BR.UTF-8" > "$HOME/.config/user-dirs.locale"
 
-# Setup automount for ssds/hdds - without fstab / Configurar automount sem fstab
+# Setup automount for ssds/hdds
 sudo cp ~/void/10-mount-drives.rules /etc/polkit-1/rules.d/
 clear
 echo "Setup finished - please reboot / Script de configuração finalizado - o sistema já pode ser reiniciado"

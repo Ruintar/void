@@ -47,11 +47,18 @@ echo "Install nano... / Instalando nano..."
 sudo xbps-install -y nano
 sleep 1
 
-# Network / Rede
+# Network & Authentication / Rede e Autenticação (NetworkManager, polkit, gnome-keyring e remoção de conflitos)
 clear
-echo "Install NetworkManager / Instalando NetworkManager"
-sudo xbps-install -y NetworkManager
+echo "Install NetworkManager, polkit and gnome-keyring / Instalando NetworkManager, polkit e gnome-keyring"
+sudo xbps-install -y NetworkManager polkit gnome-keyring
 sudo ln -s /etc/sv/NetworkManager /var/service/
+
+# Remove conflicting network and remote services / Removendo serviços conflitantes e SSH
+echo "Removing conflicting services (wpa_supplicant, dhcpcd, sshd)..."
+sudo rm -f /var/service/wpa_supplicant
+sudo rm -f /var/service/dhcpcd
+sudo rm -f /var/service/dhcpcd-eth0
+sudo rm -f /var/service/sshd
 sleep 1
 
 # dbus

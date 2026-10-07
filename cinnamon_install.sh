@@ -111,6 +111,7 @@ clear
 echo "Install XORG/Cinnamon-all... / Instalando XORG/Cinnamon-all..."
 sudo xbps-install -y xorg
 sudo xbps-install -y octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal-gtk xdg-user-dirs xdg-user-dirs-gtk xdg-utils
+# Install extra tools required for theme/icon extraction (.deb helpers & xz)
 sudo xbps-install -y wget binutils xz hicolor-icon-theme
 sleep 1
 
@@ -126,6 +127,7 @@ sleep 1
 clear
 echo "Installing additional tools... / Instalando ferramentas adicionais..."
 sudo xbps-install -y exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez
+# Activate bluetoothd / Ativar bluetoothd
 sudo ln -s /etc/sv/bluetoothd /var/service/
 sleep 1
 
@@ -141,7 +143,7 @@ echo "Install Fonts... / Instalando fontes..."
 sudo xbps-install -y noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
 sleep 1
 
-# Software / Softwares essenciais e novos pacotes solicitados
+# Software / Softwares essenciais
 clear
 echo "Install Software... / Instalando softwares..."
 sudo xbps-install -y firefox xfce4-terminal firefox-i18n-pt-BR gnome-calendar qalculate-gtk smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx
@@ -243,6 +245,7 @@ gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
 gsettings set org.cinnamon.desktop.interface clock-use-24h true
 gsettings set org.cinnamon.desktop.interface clock-show-seconds true
 gsettings set org.cinnamon.muffin.window-picker-style custom-format
+# Note: Custom date/time format for applet
 gsettings set org.cinnamon.desktop.interface clock-custom-format '%H:%M:%S\\n%d/%m/%Y'
 
 # Delete autostart entry after first execution
@@ -250,9 +253,11 @@ rm -f ~/.config/autostart/set-keyboard.desktop
 echo "Custom configurations have been applied."
 EOL
 
+# Make script executable / Tornar o script executável
 chmod +x /home/$USER/set-keyboard.sh
 
 # Create autostart file that executes the script
+mkdir -p ~/.config/autostart
 cat <<EOL > ~/.config/autostart/set-keyboard.desktop
 [Desktop Entry]
 Type=Application
@@ -262,7 +267,7 @@ Comment=Set the default keyboard layout, Mint themes, and clock format after log
 X-GNOME-Autostart-enabled=true
 EOL
 
-# Create .desktop files
+# Create .desktop file for octoxbps-notifier / Criar arquivo .desktop para o octoxbps-notifier
 cat > ~/.config/autostart/octoxbps-notifier.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -274,6 +279,7 @@ Name=OctoXBPS Notifier
 Comment=Start OctoXBPS Update Notifier automatically
 EOL
 
+# Create .desktop file for brazilian keyboard / Criar arquivo .desktop para teclado brasileiro
 cat > ~/.config/autostart/x11kb-brazil.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -285,6 +291,7 @@ Name=X11-KB-Brazil
 Comment=Activate Brazilian keyboard under X11
 EOL
 
+# Create .desktop file for automount script (udisks2) / Criar arquivo .desktop para o script de automount
 cat > ~/.config/autostart/automount-udisks2.desktop <<EOL
 [Desktop Entry]
 Type=Application

@@ -146,7 +146,7 @@ sleep 1
 # Software / Softwares essenciais
 clear
 echo "Install Software... / Instalando softwares..."
-sudo xbps-install -y firefox gnome-terminal firefox-i18n-pt-BR
+sudo xbps-install -y firefox xfce4-terminal firefox-i18n-pt-BR
 sleep 1
 
 # Download and install Linux Mint Themes, Icons, and Cursors for the user

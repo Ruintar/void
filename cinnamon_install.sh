@@ -132,6 +132,22 @@ sudo xbps-install -y octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal
 sudo xbps-install -y wget binutils xz hicolor-icon-theme
 sleep 1
 
+# Patch no Spices.py do Cinnamon para corrigir a aba de downloads
+echo "Aplicando correção no Spices.py para a aba de downloads do Cinnamon..."
+sudo python3 -c "
+import os
+path = '/usr/share/cinnamon/cinnamon-settings/bin/Spices.py'
+if os.path.exists(path):
+    with open(path, 'r') as f:
+        content = f.read()
+    old_code = 'totalSize = int(response.headers.get(\'content-length\'))'
+    new_code = 'content_length = response.headers.get(\'content-length\')\n            totalSize = int(content_length) if content_length is not None else -1'
+    if old_code in content:
+        with open(path, 'w') as f:
+            f.write(content.replace(old_code, new_code))
+"
+sleep 1
+
 # Printer support / Suporte a impressoras
 clear
 echo "Install Printer... / Instalando suporte a impressoras..."
@@ -143,7 +159,7 @@ sleep 1
 # Filesystem & additional tools / Sistema de arquivos e ferramentas adicionais
 clear
 echo "Installing additional tools... / Instalando ferramentas adicionais..."
-sudo xbps-install -y exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez
+sudo xbps-install -y exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez GPaste
 # Activate bluetoothd / Ativar bluetoothd
 sudo ln -s /etc/sv/bluetoothd /var/service/
 sleep 1
@@ -263,7 +279,7 @@ gsettings set org.cinnamon.desktop.interface clock-use-24h true
 gsettings set org.cinnamon.desktop.interface clock-show-seconds true
 gsettings set org.cinnamon.muffin.window-picker-style custom-format
 # Note: Custom date/time format for applet
-gsettings set org.cinnamon.desktop.interface clock-custom-format '%H:%M:%S\\n%d/%m/%Y'
+gsettings set org.cinnamon.desktop.interface clock-custom-format '%H:%M:%S\n%d/%m/%Y'
 
 # Delete autostart entry after first execution
 rm -f ~/.config/autostart/set-keyboard.desktop
@@ -318,6 +334,18 @@ NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=X11-automount-udisks2
 Comment=Automount script for udisks2
+EOL
+
+# Create .desktop file for GPaste Daemon / Criar arquivo .desktop para o daemon do GPaste
+cat > ~/.config/autostart/gpaste-daemon.desktop <<EOL
+[Desktop Entry]
+Type=Application
+Exec=/usr/bin/gpaste-client daemon
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=GPaste Daemon
+Comment=Start GPaste daemon automatically
 EOL
 
 echo "Autostart script created. Script finished."

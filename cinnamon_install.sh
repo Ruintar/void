@@ -1,60 +1,58 @@
 #!/bin/bash
-# This script is intended to be used by NVIDIA-GPU Owners / AMD GPU owners can comment out the NVIDIA package installation line!
 # Este script é destinado a proprietários de GPU NVIDIA / Proprietários de AMD podem comentar a linha de instalação do pacote NVIDIA!
 
-# The following script is for installing Cinnamon & services after the base installation has been performed!
 # O seguinte script serve para instalar o Cinnamon e diversos serviços após a instalação base ter sido realizada!
 
-# Start bash - set for root / Iniciar bash e definir bash para o root
+# Iniciar bash e definir bash para o root
 clear
-echo "Set rootshell to /bin/bash / Definindo rootshell para /bin/bash"
-echo "Please give rootpassword / Por favor, digite a senha do root"
+echo "Definindo rootshell para /bin/bash"
+echo "Por favor, digite a senha do root"
 su -c "chsh -s /bin/bash root"
 sleep 2
 
-# Activate sudo / Configurar sudo
+# Configurar sudo
 clear
-echo "Activate sudo for wheel-group / Ativando sudo para o grupo wheel"
-echo "Please give rootpassword / Por favor, digite a senha do root"
+echo "Ativando sudo para o grupo wheel"
+echo "Por favor, digite a senha do root"
 su -c 'echo "%wheel ALL=(ALL:ALL) ALL" | tee -a /etc/sudoers > /dev/null'
 sleep 2
 
-# Styling / Backgrounds / Estilização e Planos de Fundo
+# Estilização e Planos de Fundo
 clear
-echo "Setting up Lightdm/Cinnamon backgroundimage / Configurando plano de fundo do LightDM e Cinnamon"
-echo " -- Please give sudo-password / Por favor, digite a senha sudo abaixo -- "
+echo "Configurando plano de fundo do LightDM e Cinnamon"
+echo " -- Por favor, digite a senha sudo abaixo -- "
 sudo mkdir -p /usr/share/backgrounds/
 sudo cp ~/void/*.jpg /usr/share/backgrounds/
 
-# Copy automount script for udisks2 / Copiar script de autoinicialização para o udisks2
+# Copiar script de autoinicialização para o udisks2
 sudo cp ~/void/mount_disks.sh /usr/bin/
 
-# Check systemupdates / Verificar atualizações do sistema
+# Verificar atualizações do sistema
 sudo xbps-install -Syu
 
-# Activate all essential additional repos / Ativar repositórios adicionais essenciais do Void
+# Ativar repositórios adicionais essenciais do Void
 clear
-echo "Activate nonfree, multilib, and multilib-nonfree repos / Ativando repositórios nonfree, multilib e multilib-nonfree"
+echo "Ativando repositórios nonfree, multilib e multilib-nonfree"
 sudo xbps-install -y void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
 sleep 2
 
-# Update void repository / Atualizar repositório do Void
+# Atualizar repositório do Void
 sudo xbps-install -Syu
 
-# Install editor / Instalar editor
+# Instalar editor
 clear
-echo "Install nano... / Instalando nano..."
+echo "Instalando nano..."
 sudo xbps-install -y nano
 sleep 1
 
-# Network & Authentication / Rede e Autenticação
+# Rede e Autenticação
 clear
-echo "Install NetworkManager, polkit and gnome-keyring / Instalando NetworkManager, polkit e gnome-keyring"
+echo "Instalando NetworkManager, polkit e gnome-keyring"
 sudo xbps-install -y NetworkManager polkit gnome-keyring
 sudo ln -s /etc/sv/NetworkManager /var/service/
 
-# Remove conflicting network and remote services / Removendo serviços conflitantes e SSH
-echo "Removing conflicting services (wpa_supplicant, dhcpcd, sshd)..."
+# Removendo serviços conflitantes e SSH
+echo "Removendo serviços conflitantes (wpa_supplicant, dhcpcd, sshd)..."
 sudo rm -f /var/service/wpa_supplicant
 sudo rm -f /var/service/dhcpcd
 sudo rm -f /var/service/dhcpcd-eth0
@@ -63,72 +61,72 @@ sleep 1
 
 # dbus
 clear
-echo "Install dbus... / Instalando dbus..."
+echo "Instalando dbus..."
 sudo xbps-install -y dbus
 sudo ln -s /etc/sv/dbus /var/service/
 sleep 1
 
 # elogind
 clear
-echo "Install elogind... / Instalando elogind..."
+echo "Instalando elogind..."
 sudo xbps-install -y elogind
 sudo ln -s /etc/sv/elogind /var/service/
 sleep 1
 
 clear
-echo "Are you using a Desktop or a Laptop/Notebook? / Você está usando um Desktop ou um Laptop/Notebook?"
+echo "Você está usando um Desktop ou um Laptop/Notebook?"
 echo "0) Desktop"
 echo "1) Laptop/Notebook"
-read -p "Please select (0 or 1) / Por favor, selecione (0 ou 1): " tipo_maquina
+read -p "Por favor, selecione (0 ou 1): " tipo_maquina
 
 if [ "$tipo_maquina" = "1" ]
 then
-    echo "Applying Laptop lid switch configurations... / Aplicando configurações de tampa..."
+    echo "Aplicando configurações de tampa..."
     sudo sed -i 's/.*HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/elogind/logind.conf
     sudo sed -i 's/.*HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/' /etc/elogind/logind.conf
     sudo sed -i 's/.*HandleLidSwitchDocked=.*/HandleLidSwitchDocked=ignore/' /etc/elogind/logind.conf
 else
-    echo "Desktop selected. Skipping lid switch config. / Desktop selecionado. Configuração de tampa ignorada."
+    echo "Desktop selecionado. Configuração de tampa ignorada."
 fi
 sleep 1
 
-# Audio, Bluetooth and Mixer / Áudio, Bluetooth e Mixer
+# Áudio, Bluetooth e Mixer
 clear
-echo "Install pipewire, wireplumber, pavucontrol, pulsemixer / Instalando pipewire, wireplumber, pavucontrol, pulsemixer"
+echo "Instalando pipewire, wireplumber, pavucontrol, pulsemixer"
 sudo xbps-install -y pipewire wireplumber pavucontrol pulsemixer libspa-bluetooth blueman bluez-cups
 sleep 1
 
-# Install NVIDIA-driver / Instalar driver NVIDIA
+# Instalar driver NVIDIA
 clear
-echo "Available NVIDIA drivers (Intel + GeForce 930MX):"
-echo "1) Latest NVIDIA driver (nvidia) / Driver mais recente"
-echo "0) No installation / Nenhuma instalação"
-read -p "Please select a driver (1, 0 to cancel) / Por favor, selecione um driver (1, 0 para cancelar): " auswahl
+echo "Drivers NVIDIA disponíveis (Intel + GeForce 930MX):"
+echo "1) Driver NVIDIA mais recente (nvidia)"
+echo "0) Nenhuma instalação"
+read -p "Por favor, selecione um driver (1, 0 para cancelar): " auswahl
 
 case "$auswahl" in
     1)
-        echo "Installing latest NVIDIA driver... / Instalando driver NVIDIA mais recente..."
+        echo "Instalando driver NVIDIA mais recente..."
         sudo xbps-install -y nvidia nvidia-libs-32bit
         ;;
     0)
-        echo "NVIDIA setup skipped! / Configuração da NVIDIA ignorada."
+        echo "Configuração da NVIDIA ignorada."
         ;;
     *)
-        echo "Invalid selection! No changes made. / Seleção inválida. Nenhuma alteração feita."
+        echo "Seleção inválida. Nenhuma alteração feita."
         ;;
 esac
 
 sleep 1
 
-# Install some Steam-related-stuff / Componentes da Steam
+# Componentes da Steam
 sudo xbps-install -y libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-dri-32bit
 
-# XORG & Cinnamon & Tools / XORG, Cinnamon e Ferramentas
+# XORG, Cinnamon e Ferramentas
 clear
-echo "Install XORG/Cinnamon-all... / Instalando XORG/Cinnamon-all..."
+echo "Instalando XORG/Cinnamon-all..."
 sudo xbps-install -y xorg
 sudo xbps-install -y octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal-gtk xdg-user-dirs xdg-user-dirs-gtk xdg-utils
-# Install extra tools required for theme/icon extraction (.deb helpers & xz)
+# Instalar ferramentas extras necessárias para extração de temas/ícones (auxiliares .deb e xz)
 sudo xbps-install -y wget binutils xz hicolor-icon-theme
 sleep 1
 
@@ -148,37 +146,37 @@ if os.path.exists(path):
 "
 sleep 1
 
-# Printer support / Suporte a impressoras
+# Suporte a impressoras
 clear
-echo "Install Printer... / Instalando suporte a impressoras..."
+echo "Instalando suporte a impressoras..."
 sudo xbps-install -y cups cups-filters gutenprint system-config-printer
 sudo ln -s /etc/sv/cupsd /var/service/
 sudo xbps-install -y gnome-system-tools users-admin
 sleep 1
 
-# Filesystem & additional tools / Sistema de arquivos e ferramentas adicionais
+# Sistema de arquivos e ferramentas adicionais
 clear
-echo "Installing additional tools... / Instalando ferramentas adicionais..."
+echo "Instalando ferramentas adicionais..."
 sudo xbps-install -y exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez GPaste
-# Activate bluetoothd / Ativar bluetoothd
+# Ativar bluetoothd
 sudo ln -s /etc/sv/bluetoothd /var/service/
 sleep 1
 
-# Upgradetool / Ferramenta de atualização
+# Ferramenta de atualização
 clear
-echo "Install topgrade... / Instalando topgrade..."
+echo "Instalando topgrade..."
 sudo xbps-install -y topgrade
 sleep 1
 
-# Fonts / Fontes
+# Fontes
 clear
-echo "Install Fonts... / Instalando fontes..."
+echo "Instalando fontes..."
 sudo xbps-install -y noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
 sleep 1
 
-# Software / Softwares essenciais
+# Softwares essenciais
 clear
-echo "Install Software... / Instalando softwares..."
+echo "Instalando softwares..."
 sudo xbps-install -y firefox xfce4-terminal firefox-i18n-pt-BR gnome-calendar qalculate-gtk smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx
 sleep 1
 
@@ -222,7 +220,7 @@ Section "InputClass"
 EndSection
 EOF
 
-# Autostart NumLock Cinnamon
+# Inicialização automática do NumLock no Cinnamon
 echo "Criando entrada de inicialização do NumLock para o Cinnamon..."
 mkdir -p ~/.config/autostart
 cat << 'EOF' > ~/.config/autostart/numlockx.desktop
@@ -233,8 +231,8 @@ Exec=numlockx on
 X-GNOME-Autostart-enabled=true
 EOF
 
-# Download and install Linux Mint Themes, Icons, and Cursors for the user
-echo "Downloading and installing Linux Mint themes, icons, and cursors..."
+# Baixar e instalar temas, ícones e cursores do Linux Mint para o usuário
+echo "Baixando e instalando temas, ícones e cursores do Linux Mint..."
 mkdir -p ~/.themes ~/.icons
 
 # 1. Mint-Themes (v2.4.2)
@@ -258,15 +256,15 @@ tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/icons/*'
 mv usr/share/icons/* ~/.icons/
 rm -rf usr data.tar.xz control.tar.xz debian-binary mint-cursor-themes_1.0.2_all.deb
 
-# Create a script that sets keyboard layout, styling, and clock format after login
-echo "Creating autostart script for custom settings..."
+# Criar script que define layout do teclado, estilo e formato do relógio após o login
+echo "Criando script de inicialização automática para configurações personalizadas..."
 cat <<EOL > /home/$USER/set-keyboard.sh
 #!/bin/bash
-# Set pt_BR keyboard layout, Mint-Y-Dark theme, and custom clock format on session start
+# Definir layout de teclado pt_BR, tema Mint-Y-Dark e formato personalizado do relógio no início da sessão
 gsettings set org.cinnamon.desktop.input-sources sources "[('xkb', 'br')]"
 gsettings set org.cinnamon.desktop.background picture-uri 'file:///usr/share/backgrounds/cinnamon_background.jpg'
 
-# Apply Mint-Y-Dark theme settings
+# Aplicar configurações do tema Mint-Y-Dark
 gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark'
 gsettings set org.cinnamon.desktop.wm.preferences theme 'Mint-Y-Dark'
 gsettings set org.cinnamon.theme name 'Mint-Y-Dark'
@@ -274,33 +272,33 @@ gsettings set org.cinnamon.desktop.interface icon-theme 'Mint-Y'
 gsettings set org.cinnamon.desktop.interface cursor-theme 'Mint-Y'
 gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
 
-# Configure clock applet format (Time with seconds on top, date on bottom)
+# Configurar formato do applet do relógio (Hora com segundos em cima, data embaixo)
 gsettings set org.cinnamon.desktop.interface clock-use-24h true
 gsettings set org.cinnamon.desktop.interface clock-show-seconds true
 gsettings set org.cinnamon.muffin.window-picker-style custom-format
-# Note: Custom date/time format for applet
+# Nota: Formato personalizado de data/hora para o applet
 gsettings set org.cinnamon.desktop.interface clock-custom-format '%H:%M:%S\n%d/%m/%Y'
 
-# Delete autostart entry after first execution
+# Excluir entrada de inicialização automática após a primeira execução
 rm -f ~/.config/autostart/set-keyboard.desktop
-echo "Custom configurations have been applied."
+echo "As configurações personalizadas foram aplicadas."
 EOL
 
-# Make script executable / Tornar o script executável
+# Tornar o script executável
 chmod +x /home/$USER/set-keyboard.sh
 
-# Create autostart file that executes the script
+# Criar arquivo de inicialização automática que executa o script
 mkdir -p ~/.config/autostart
 cat <<EOL > ~/.config/autostart/set-keyboard.desktop
 [Desktop Entry]
 Type=Application
 Exec=/home/$USER/set-keyboard.sh
 Name=Set Mint Customization and Keyboard
-Comment=Set the default keyboard layout, Mint themes, and clock format after login
+Comment=Definir o layout do teclado padrão, temas Mint e formato do relógio após o login
 X-GNOME-Autostart-enabled=true
 EOL
 
-# Create .desktop file for octoxbps-notifier / Criar arquivo .desktop para o octoxbps-notifier
+# Criar arquivo .desktop para o octoxbps-notifier
 cat > ~/.config/autostart/octoxbps-notifier.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -309,10 +307,10 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=OctoXBPS Notifier
-Comment=Start OctoXBPS Update Notifier automatically
+Comment=Iniciar o notificador de atualizações do OctoXBPS automaticamente
 EOL
 
-# Create .desktop file for brazilian keyboard / Criar arquivo .desktop para teclado brasileiro
+# Criar arquivo .desktop para teclado brasileiro
 cat > ~/.config/autostart/x11kb-brazil.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -321,10 +319,10 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=X11-KB-Brazil
-Comment=Activate Brazilian keyboard under X11
+Comment=Ativar teclado brasileiro no X11
 EOL
 
-# Create .desktop file for automount script (udisks2) / Criar arquivo .desktop para o script de automount
+# Criar arquivo .desktop para o script de montagem automática (udisks2)
 cat > ~/.config/autostart/automount-udisks2.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -333,10 +331,10 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=X11-automount-udisks2
-Comment=Automount script for udisks2
+Comment=Script de montagem automática para udisks2
 EOL
 
-# Create .desktop file for GPaste Daemon / Criar arquivo .desktop para o daemon do GPaste
+# Criar arquivo .desktop para o daemon do GPaste
 cat > ~/.config/autostart/gpaste-daemon.desktop <<EOL
 [Desktop Entry]
 Type=Application
@@ -345,19 +343,19 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=GPaste Daemon
-Comment=Start GPaste daemon automatically
+Comment=Iniciar daemon do GPaste automaticamente
 EOL
 
-echo "Autostart script created. Script finished."
+echo "Script de inicialização automática criado. Script finalizado."
 
-# Login manager / Gerenciador de login
+# Gerenciador de login
 clear
-echo "Install LightDM... / Instalando LightDM..."
+echo "Instalando LightDM..."
 sudo xbps-install -y lightdm lightdm-gtk-greeter lightdm-gtk-greeter-settings
 sudo ln -s /etc/sv/lightdm/ /var/service/
 sleep 1
 
-# Configure LightDM background and Theme
+# Configurar plano de fundo e tema do LightDM
 sudo tee -a /etc/lightdm/lightdm-gtk-greeter.conf > /dev/null << 'EOF'
 [greeter]
 background=/usr/share/backgrounds/lightdmbackground.jpg
@@ -380,16 +378,16 @@ sudo tee /etc/lightdm/lightdm.conf.d/60-custom-greeter.conf > /dev/null << 'EOF'
 greeter-setup-script=/usr/local/bin/lightdm-greeter-setup.sh
 EOF
 
-# Setup Autostart - pipewire & wireplumber / Configurar autostart do PipeWire e WirePlumber
+# Configurar inicialização automática do PipeWire e WirePlumber
 sudo mkdir -p /etc/pipewire/pipewire.conf.d
 sudo ln -s /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pipewire.conf.d/
 sudo ln -s /usr/share/examples/pipewire/20-pipewire-pulse.conf /etc/pipewire/pipewire.conf.d/
 sudo ln -s /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
 sleep 1
 
-# GRUB Configuration / Configuração do GRUB
+# Configuração do GRUB
 clear
-echo "Configuring GRUB... / Configurando o GRUB..."
+echo "Configurando o GRUB..."
 sudo sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
 sudo sed -i 's/.*GRUB_COLOR_NORMAL=.*/GRUB_COLOR_NORMAL="light-blue\/black"/' /etc/default/grub
 
@@ -439,8 +437,8 @@ else
     echo "LC_COLLATE=C" | sudo tee -a /etc/locale.conf > /dev/null
 fi
 
-# Setup automount for ssds/hdds
+# Configurar montagem automática para SSDs/HDDs
 sudo cp ~/void/10-mount-drives.rules /etc/polkit-1/rules.d/
 clear
-echo "Setup finished - please reboot / Script de configuração finalizado - o sistema já pode ser reiniciado"
+echo "Script de configuração finalizado - o sistema já pode ser reiniciado"
 echo "Use sudo reboot"

@@ -353,15 +353,16 @@ echo "Autostart script created. Script finished."
 # Login manager / Gerenciador de login
 clear
 echo "Install LightDM... / Instalando LightDM..."
-sudo xbps-install -y lightdm lightdm-gtk-greeter
+sudo xbps-install -y lightdm lightdm-gtk-greeter lightdm-gtk-greeter-settings
 sudo ln -s /etc/sv/lightdm/ /var/service/
 sleep 1
 
-# Configure LightDM background and Mint-Y-Dark Theme
+# Configure LightDM background and Theme
 sudo tee -a /etc/lightdm/lightdm-gtk-greeter.conf > /dev/null << 'EOF'
+[greeter]
 background=/usr/share/backgrounds/lightdmbackground.jpg
-theme-name=Mint-Y-Dark
-icon-theme-name=Mint-Y
+theme-name=Adwaita-dark
+icon-theme-name=Adwaita
 EOF
 
 # Configuração unificada do LightDM Greeter para Scroll Lock e NumLock
@@ -391,17 +392,52 @@ clear
 echo "Configuring GRUB... / Configurando o GRUB..."
 sudo sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
 sudo sed -i 's/.*GRUB_COLOR_NORMAL=.*/GRUB_COLOR_NORMAL="light-blue\/black"/' /etc/default/grub
-sudo sed -i 's/.*GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
 
-grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub || echo "GRUB_TIMEOUT_STYLE=menu" | sudo tee -a /etc/default/grub
-grep -q "^GRUB_RECORDFAIL_TIMEOUT=" /etc/default/grub || echo "GRUB_RECORDFAIL_TIMEOUT=5" | sudo tee -a /etc/default/grub
+echo "Deseja pular a contagem do GRUB e iniciar automaticamente?"
+echo "Aviso: se você usa um notebook e ele tiver problema de tecla fantasma"
+echo "com defeito no firmware e você não quiser confirmar a entrada toda vez,"
+echo "é necessário efetuar essa alteração para pular o menu."
+echo "1) Sim, iniciar direto e pular tempo"
+echo "0) Não, manter contagem padrão e exibir menu"
+read -p "Por favor, selecione (0 ou 1): " pular_grub
 
-sudo grub-editenv create
-sudo grub-mkconfig -o /boot/grub/grub.cfg
+if [ "$tipo_maquina" = "1" ] || [ "$pular_grub" = "1" ]
+then
+    echo "Aplicando configuração de inicialização direta..."
+    sudo sed -i 's/.*GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
+else
+    echo "Mantendo a contagem padrão do GRUB..."
+    sudo sed -i 's/.*GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
+fi
+
+sudo update-grub || sudo grub-mkconfig -o /boot/grub/grub.cfg
 sleep 1
 
-# Activate Brazilian locale / Ativar localidade pt_BR
-echo "pt_BR.UTF-8" > "$HOME/.config/user-dirs.locale"
+# Configurar locales do sistema globalmente (pt_BR.UTF-8, LC_TIME e LC_COLLATE=C)
+echo "Configurando locales do sistema..."
+sudo sed -i 's/^[[:space:]]*#[[:space:]]*\(pt_BR\.UTF-8[[:space:]]\+UTF-8\)/\1/' /etc/default/libc-locales
+sudo sed -i '/pt_BR\.UTF-8/!s/^[[:space:]]*\([^#[:space:]].*UTF-8\)/# \1/' /etc/default/libc-locales
+sudo xbps-reconfigure -f glibc-locales
+
+sudo touch /etc/locale.conf
+
+if grep -q "^LANG=" /etc/locale.conf; then
+    sudo sed -i 's/^LANG=.*/LANG=pt_BR.UTF-8/' /etc/locale.conf
+else
+    echo "LANG=pt_BR.UTF-8" | sudo tee -a /etc/locale.conf > /dev/null
+fi
+
+if grep -q "^LC_TIME=" /etc/locale.conf; then
+    sudo sed -i 's/^LC_TIME=.*/LC_TIME=pt_BR.UTF-8/' /etc/locale.conf
+else
+    echo "LC_TIME=pt_BR.UTF-8" | sudo tee -a /etc/locale.conf > /dev/null
+fi
+
+if grep -q "^LC_COLLATE=" /etc/locale.conf; then
+    sudo sed -i 's/^LC_COLLATE=.*/LC_COLLATE=C/' /etc/locale.conf
+else
+    echo "LC_COLLATE=C" | sudo tee -a /etc/locale.conf > /dev/null
+fi
 
 # Setup automount for ssds/hdds
 sudo cp ~/void/10-mount-drives.rules /etc/polkit-1/rules.d/

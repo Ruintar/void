@@ -75,6 +75,23 @@ sudo xbps-install -y elogind
 sudo ln -s /etc/sv/elogind /var/service/
 sleep 1
 
+clear
+echo "Are you using a Desktop or a Laptop/Notebook? / Você está usando um Desktop ou um Laptop/Notebook?"
+echo "0) Desktop"
+echo "1) Laptop/Notebook"
+read -p "Please select (0 or 1) / Por favor, selecione (0 ou 1): " tipo_maquina
+
+if [ "$tipo_maquina" = "1" ]
+then
+    echo "Applying Laptop lid switch configurations... / Aplicando configurações de tampa..."
+    sudo sed -i 's/.*HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/elogind/logind.conf
+    sudo sed -i 's/.*HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/' /etc/elogind/logind.conf
+    sudo sed -i 's/.*HandleLidSwitchDocked=.*/HandleLidSwitchDocked=ignore/' /etc/elogind/logind.conf
+else
+    echo "Desktop selected. Skipping lid switch config. / Desktop selecionado. Configuração de tampa ignorada."
+fi
+sleep 1
+
 # Audio, Bluetooth and Mixer / Áudio, Bluetooth e Mixer
 clear
 echo "Install pipewire, wireplumber, pavucontrol, pulsemixer / Instalando pipewire, wireplumber, pavucontrol, pulsemixer"
@@ -340,7 +357,20 @@ sudo ln -s /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pip
 sudo ln -s /usr/share/examples/pipewire/20-pipewire-pulse.conf /etc/pipewire/pipewire.conf.d/
 sudo ln -s /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
 sleep 1
+
+# GRUB Configuration / Configuração do GRUB
 clear
+echo "Configuring GRUB... / Configurando o GRUB..."
+sudo sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
+sudo sed -i 's/.*GRUB_COLOR_NORMAL=.*/GRUB_COLOR_NORMAL="light-blue\/black"/' /etc/default/grub
+sudo sed -i 's/.*GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
+
+grep -q "^GRUB_TIMEOUT_STYLE=" /etc/default/grub || echo "GRUB_TIMEOUT_STYLE=menu" | sudo tee -a /etc/default/grub
+grep -q "^GRUB_RECORDFAIL_TIMEOUT=" /etc/default/grub || echo "GRUB_RECORDFAIL_TIMEOUT=5" | sudo tee -a /etc/default/grub
+
+sudo grub-editenv create
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+sleep 1
 
 # Activate Brazilian locale / Ativar localidade pt_BR
 echo "pt_BR.UTF-8" > "$HOME/.config/user-dirs.locale"

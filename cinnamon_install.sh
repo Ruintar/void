@@ -1,61 +1,59 @@
 #!/bin/bash
+# ==============================================================================
+# Lançador Central de Pós-Instalação do Void Linux (Cinnamon Desktop)
+# ==============================================================================
+
+set -euo pipefail
+
+# Obter o diretório absoluto onde o lançador está localizado
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Verificar privilégios de root para a execução do lançador
+if [ "$EUID" -ne 0 ]; then
+    echo "Erro: Este script lançador precisa ser executado com privilégios de root (via sudo)."
+    echo "Exemplo: sudo ./cinnamon_install.sh"
+    exit 1
+fi
+
+clear
+echo "=============================================================================="
+echo "      Void Linux Cinnamon Post-Installation / Pós-Instalação / Posinstalación"
+echo "=============================================================================="
+echo ""
+echo "Select language / Selecione o idioma / Seleccione el idioma:"
+echo ""
+echo "  1) Português (Brasil)  - [PT-BR]"
+echo "  2) English (US)        - [EN-US]"
+echo "  3) Español (España)    - [ES-ES]"
+echo "  0) Exit / Sair / Salir"
+echo ""
 
 while true; do
-    clear
-    echo "=========================================================="
-    echo " Select Language / Selecione o Idioma / Seleccione el Idioma"
-    echo "=========================================================="
-    echo " 1) English (EN_US)"
-    echo " 2) Português (PT_BR)"
-    echo " 3) Español (ES_ES)"
-    echo " 0) Exit / Sair / Salir"
-    echo "=========================================================="
-    read -p "Option / Opção / Opción [0-3]: " input_val
-
-    # Valida se a entrada é estritamente 0, 1, 2 ou 3 (rejeita letras, símbolos, espaços e vazios)
-    # Validates if input is strictly 0, 1, 2 or 3 (rejects letters, symbols, spaces and empty inputs)
-    # Valida si la entrada es estrictamente 0, 1, 2 o 3 (rechaza letras, símbolos, espacios y vacíos)
-    if [[ "$input_val" =~ ^[0-3]$ ]]; then
-        case "$input_val" in
-            1)
-                # Checks and runs the English script
-                if [ -f "./cinnamon_install_EN_US.sh" ]; then
-                    bash ./cinnamon_install_EN_US.sh
-                else
-                    echo "Error: cinnamon_install_EN_US.sh not found!"
-                fi
-                exit 0
-                ;;
-            2)
-                # Verifica e executa o script em português
-                if [ -f "./cinnamon_install_PT_BR.sh" ]; then
-                    bash ./cinnamon_install_PT_BR.sh
-                else
-                    echo "Erro: cinnamon_install_PT_BR.sh não encontrado!"
-                fi
-                exit 0
-                ;;
-            3)
-                # Verifica y ejecuta el script en español
-                if [ -f "./cinnamon_install_ES_ES.sh" ]; then
-                    bash ./cinnamon_install_ES_ES.sh
-                else
-                    echo "Error: cinnamon_install_ES_ES.sh no encontrado!"
-                fi
-                exit 0
-                ;;
-            0)
-                echo "Exiting. / Saindo. / Saliendo."
-                exit 0
-                ;;
-        esac
-    else
-        echo ""
-        echo "----------------------------------------------------------"
-        echo " [EN-US] Invalid option! Please try again or exit."
-        echo " [PT-BR] Opção inválida! Tente novamente ou cancele."
-        echo " [ES-ES] ¡Opción inválida! Inténtelo de nuevo o salga."
-        echo "----------------------------------------------------------"
-        sleep 2
-    fi
+    read -r -p "Option / Opção / Opción [0-3]: " lang_choice
+    case "$lang_choice" in
+        1)
+            echo "Iniciando instalação em Português (Brasil)..."
+            exec "$SCRIPT_DIR/cinnamon_install_PT_BR.sh"
+            ;;
+        2)
+            echo "Starting installation in English (US)..."
+            exec "$SCRIPT_DIR/cinnamon_install_EN_US.sh"
+            ;;
+        3)
+            echo "Iniciando instalación en Español (España)..."
+            exec "$SCRIPT_DIR/cinnamon_install_ES_ES.sh"
+            ;;
+        0)
+            echo "Exiting / Saindo / Saliendo..."
+            exit 0
+            ;;
+        *)
+            echo ""
+            echo "----------------------------------------------------------"
+            echo " [EN-US] Invalid option! Please try again or exit."
+            echo " [PT-BR] Opção inválida! Tente novamente ou cancele."
+            echo " [ES-ES] ¡Opción inválida! Inténtelo de nuevo o salga."
+            echo "----------------------------------------------------------"
+            ;;
+    esac
 done

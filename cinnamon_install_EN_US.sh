@@ -184,10 +184,30 @@ sleep 1
 echo "Configuring QT_QPA_PLATFORMTHEME variable..."
 echo "QT_QPA_PLATFORMTHEME=qt5ct" | sudo tee -a /etc/environment > /dev/null
 
-# XFCE Terminal configuration
-echo "Configuring xfce4-terminal visual profile..."
-mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml
-cat << 'EOF' > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml
+# XFCE Terminal Configuration
+clear
+echo "Do you want to apply visual customization to xfce4-terminal (transparency and font)?"
+echo "Y) Yes"
+echo "N) No"
+
+personalizar_terminal=""
+while true; do
+    read -p "Please select [Y/N]: " input_val
+    if [[ "$input_val" =~ ^[yY]$ ]]; then
+        personalizar_terminal="yes"
+        break
+    elif [[ "$input_val" =~ ^[nN]$ ]]; then
+        personalizar_terminal="no"
+        break
+    else
+        echo "Invalid option! Type Y for Yes or N for No."
+    fi
+done
+
+if [ "$personalizar_terminal" = "yes" ]; then
+    echo "Configuring xfce4-terminal visual profile..."
+    mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml
+    cat << 'EOF' > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml
 <?xml version="1.1" encoding="UTF-8"?>
 
 <channel name="xfce4-terminal" version="1.0">
@@ -206,6 +226,10 @@ cat << 'EOF' > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml
   <property name="color-palette" type="string" value="rgb(0,0,0);rgb(170,0,0);rgb(0,170,0);rgb(170,85,0);rgb(0,0,170);rgb(170,0,170);rgb(0,170,170);rgb(170,170,170);rgb(85,85,85);rgb(255,85,85);rgb(85,255,85);rgb(255,255,85);rgb(85,85,255);rgb(255,85,255);rgb(85,255,255);rgb(255,255,255)"/>
 </channel>
 EOF
+else
+    echo "xfce4-terminal customization skipped. Default appearance will be kept."
+fi
+sleep 1
 
 # Native US International/Standard Keyboard X11
 echo "Enabling US keyboard layout in X11..."

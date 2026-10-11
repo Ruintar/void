@@ -185,9 +185,29 @@ echo "Configurando la variable QT_QPA_PLATFORMTHEME..."
 echo "QT_QPA_PLATFORMTHEME=qt5ct" | sudo tee -a /etc/environment > /dev/null
 
 # Configuración de XFCE Terminal
-echo "Configurando el perfil visual de xfce4-terminal..."
-mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml
-cat << 'EOF' > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml
+clear
+echo "¿Desea aplicar la personalización visual en xfce4-terminal (transparencia y fuente)?"
+echo "S) Sí"
+echo "N) No"
+
+personalizar_terminal=""
+while true; do
+    read -p "Por favor, seleccione [S/N]: " input_val
+    if [[ "$input_val" =~ ^[sS]$ ]]; then
+        personalizar_terminal="si"
+        break
+    elif [[ "$input_val" =~ ^[nN]$ ]]; then
+        personalizar_terminal="no"
+        break
+    else
+        echo "¡Opción inválida! Escriba S para Sí o N para No."
+    fi
+done
+
+if [ "$personalizar_terminal" = "si" ]; then
+    echo "Configurando el perfil visual de xfce4-terminal..."
+    mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml
+    cat << 'EOF' > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml
 <?xml version="1.1" encoding="UTF-8"?>
 
 <channel name="xfce4-terminal" version="1.0">
@@ -206,6 +226,10 @@ cat << 'EOF' > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml
   <property name="color-palette" type="string" value="rgb(0,0,0);rgb(170,0,0);rgb(0,170,0);rgb(170,85,0);rgb(0,0,170);rgb(170,0,170);rgb(0,170,170);rgb(170,170,170);rgb(85,85,85);rgb(255,85,85);rgb(85,255,85);rgb(255,255,85);rgb(85,85,255);rgb(255,85,255);rgb(85,255,255);rgb(255,255,255)"/>
 </channel>
 EOF
+else
+    echo "Personalización de xfce4-terminal omitida. Se mantendrá la apariencia predeterminada."
+fi
+sleep 1
 
 # Scroll Lock Nativo X11 (Teclado Español)
 echo "Activando Scroll Lock nativo en X11..."

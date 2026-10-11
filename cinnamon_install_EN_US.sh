@@ -1,190 +1,180 @@
 #!/bin/bash
-# This script is intended for NVIDIA GPU owners. AMD GPU owners can comment out the NVIDIA package installation line!
+# ==============================================================================
+# Void Linux Post-Installation Script (Cinnamon Desktop - EN_US)
+# ==============================================================================
 
-# This script installs the Cinnamon desktop environment and various services after the base system installation.
+# Abort execution immediately if any command fails
+set -euo pipefail
 
-# Start bash and set shell to root
+# ------------------------------------------------------------------------------
+# 1. Security Checks and Basic Permissions
+# ------------------------------------------------------------------------------
+
+# Identify the real user (even when running under sudo)
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME=$(eval echo "~$REAL_USER")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Verify root privileges
+if [ "$EUID" -ne 0 ]; then
+    echo "Error: This script must be run with root privileges (or via sudo)."
+    echo "Example: sudo ./cinnamon_install_EN_US.sh"
+    exit 1
+fi
+
+# Secure temporary directory for package extraction
+TMP_DIR=$(mktemp -d -t void-install-XXXXXX)
+
+# Cleanup function executed on exit or interruption (Ctrl+C / Error)
+cleanup() {
+    local exit_code=$?
+    echo -e "\nCleaning up temporary files..."
+    rm -rf "$TMP_DIR"
+    if [ $exit_code -ne 0 ]; then
+        echo "The script was interrupted or encountered an error during execution."
+    fi
+}
+trap cleanup EXIT INT TERM
+
+# ------------------------------------------------------------------------------
+# 2. Shell and Sudoers Configuration
+# ------------------------------------------------------------------------------
+echo "==> Configuring root shell and sudo permissions..."
+chsh -s /bin/bash root
+
+if ! grep -q "^%wheel ALL=(ALL:ALL) ALL" /etc/sudoers; then
+    echo "%wheel ALL=(ALL:ALL) ALL" >> /etc/sudoers
+fi
+
+# ------------------------------------------------------------------------------
+# 3. Backgrounds and Support Scripts
+# ------------------------------------------------------------------------------
+echo "==> Copying resources and backgrounds from repository..."
+mkdir -p /usr/share/backgrounds/
+
+if compgen -G "$SCRIPT_DIR/*.jpg" > /dev/null; then
+    cp "$SCRIPT_DIR"/*.jpg /usr/share/backgrounds/
+else
+    echo "Notice: No .jpg images found in $SCRIPT_DIR"
+fi
+
+if [ -f "$SCRIPT_DIR/mount_disks.sh" ]; then
+    cp "$SCRIPT_DIR/mount_disks.sh" /usr/bin/
+    chmod +x /usr/bin/mount_disks.sh
+fi
+
+# ------------------------------------------------------------------------------
+# 4. Repository Sync and Initial Update
+# ------------------------------------------------------------------------------
+echo "==> Syncing and enabling additional Void Linux repositories..."
+xbps-install -Syu
+xbps-install -y void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
+xbps-install -Syu
+
+# ------------------------------------------------------------------------------
+# 5. Core Services Installation and Activation
+# ------------------------------------------------------------------------------
+echo "==> Installing essential utilities, network, and authentication tools..."
+xbps-install -y nano NetworkManager polkit gnome-keyring dbus elogind
+
+# Clean removal of conflicting network services
+for svc in wpa_supplicant dhcpcd dhcpcd-eth0 sshd; do
+    if [ -L "/var/service/$svc" ] || [ -e "/var/service/$svc" ]; then
+        rm -f "/var/service/$svc"
+    fi
+done
+
+# Safe service symlinking (prevents duplicate link errors)
+for svc in NetworkManager dbus elogind; do
+    if [ ! -L "/var/service/$svc" ]; then
+        ln -s "/etc/sv/$svc" /var/service/
+    fi
+done
+
+# Laptop Lid Configuration
 clear
-echo "Setting root shell to /bin/bash"
-echo "Please enter the root password"
-su -c "chsh -s /bin/bash root"
-sleep 2
-
-# Configure sudo for wheel group
-clear
-echo "Enabling sudo for the wheel group"
-echo "Please enter the root password"
-su -c 'echo "%wheel ALL=(ALL:ALL) ALL" | tee -a /etc/sudoers > /dev/null'
-sleep 2
-
-# Styling and Backgrounds
-clear
-echo "Configuring LightDM and Cinnamon backgrounds"
-echo " -- Please enter the sudo password below -- "
-sudo mkdir -p /usr/share/backgrounds/
-sudo cp ~/void/*.jpg /usr/share/backgrounds/
-
-# Copy automount script for udisks2
-sudo cp ~/void/mount_disks.sh /usr/bin/
-
-# Check system updates
-sudo xbps-install -Syu
-
-# Enable essential additional Void repositories
-clear
-echo "Enabling nonfree, multilib, and multilib-nonfree repositories"
-sudo xbps-install -y void-repo-nonfree void-repo-multilib void-repo-multilib-nonfree
-sleep 2
-
-# Update Void repositories
-sudo xbps-install -Syu
-
-# Install text editor
-clear
-echo "Installing nano..."
-sudo xbps-install -y nano
-sleep 1
-
-# Network & Authentication
-clear
-echo "Installing NetworkManager, polkit, and gnome-keyring"
-sudo xbps-install -y NetworkManager polkit gnome-keyring
-sudo ln -s /etc/sv/NetworkManager /var/service/
-
-# Remove conflicting network and remote services
-echo "Removing conflicting services (wpa_supplicant, dhcpcd, sshd)..."
-sudo rm -f /var/service/wpa_supplicant
-sudo rm -f /var/service/dhcpcd
-sudo rm -f /var/service/dhcpcd-eth0
-sudo rm -f /var/service/sshd
-sleep 1
-
-# dbus service
-clear
-echo "Installing dbus..."
-sudo xbps-install -y dbus
-sudo ln -s /etc/sv/dbus /var/service/
-sleep 1
-
-# elogind service
-clear
-echo "Installing elogind..."
-sudo xbps-install -y elogind
-sudo ln -s /etc/sv/elogind /var/service/
-sleep 1
-
-clear
-echo "Are you using a Desktop or a Laptop/Notebook?"
+echo "Are you installing on a Desktop or Laptop/Notebook?"
 echo "0) Desktop"
 echo "1) Laptop/Notebook"
-read -p "Please select (0 or 1): " tipo_maquina
+read -r -p "Please select an option [0-1]: " tipo_maquina
 
-if [ "$tipo_maquina" = "1" ]
-then
-    echo "Applying laptop lid switch configurations..."
-    sudo sed -i 's/.*HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/elogind/logind.conf
-    sudo sed -i 's/.*HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/' /etc/elogind/logind.conf
-    sudo sed -i 's/.*HandleLidSwitchDocked=.*/HandleLidSwitchDocked=ignore/' /etc/elogind/logind.conf
-else
-    echo "Desktop selected. Lid switch configuration skipped."
+if [ "$tipo_maquina" = "1" ]; then
+    echo "Configuring laptop lid switch options in elogind..."
+    sed -i 's/.*HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/elogind/logind.conf
+    sed -i 's/.*HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/' /etc/elogind/logind.conf
+    sed -i 's/.*HandleLidSwitchDocked=.*/HandleLidSwitchDocked=ignore/' /etc/elogind/logind.conf
 fi
-sleep 1
 
-# Audio, Bluetooth, and Mixer
+# ------------------------------------------------------------------------------
+# 6. Audio Server and Bluetooth
+# ------------------------------------------------------------------------------
+echo "==> Installing PipeWire, WirePlumber, and Bluetooth support..."
+xbps-install -y pipewire wireplumber pavucontrol pulsemixer libspa-bluetooth blueman bluez-cups
+
+# ------------------------------------------------------------------------------
+# 7. NVIDIA Video Driver (Optional)
+# ------------------------------------------------------------------------------
 clear
-echo "Installing pipewire, wireplumber, pavucontrol, pulsemixer"
-sudo xbps-install -y pipewire wireplumber pavucontrol pulsemixer libspa-bluetooth blueman bluez-cups
-sleep 1
+echo "Available NVIDIA drivers:"
+echo "1) Proprietary NVIDIA Driver + 32-bit Support (nvidia nvidia-libs-32bit)"
+echo "0) Skip installation"
+read -r -p "Please select (1 or 0): " opt_nvidia
 
-# Install NVIDIA driver
-clear
-echo "Available NVIDIA drivers (Intel + GeForce 930MX):"
-echo "1) Latest NVIDIA driver (nvidia)"
-echo "0) No installation"
-read -p "Please select a driver (1, 0 to cancel): " auswahl
+if [ "$opt_nvidia" = "1" ]; then
+    echo "Installing NVIDIA drivers..."
+    xbps-install -y nvidia nvidia-libs-32bit
+fi
 
-case "$auswahl" in
-    1)
-        echo "Installing latest NVIDIA driver..."
-        sudo xbps-install -y nvidia nvidia-libs-32bit
-        ;;
-    0)
-        echo "NVIDIA setup skipped."
-        ;;
-    *)
-        echo "Invalid selection. No changes made."
-        ;;
-esac
+# Steam compatibility and 32-bit libraries
+xbps-install -y libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-dri-32bit
 
-sleep 1
+# ------------------------------------------------------------------------------
+# 8. Cinnamon Desktop Environment and System Tools
+# ------------------------------------------------------------------------------
+echo "==> Installing XOrg, Cinnamon Desktop, and Tools..."
+xbps-install -y xorg octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal-gtk \
+                xdg-user-dirs xdg-user-dirs-gtk xdg-utils wget binutils xz hicolor-icon-theme
 
-# Steam-related components
-sudo xbps-install -y libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-dri-32bit
-
-# XORG, Cinnamon, and Tools
-clear
-echo "Installing XORG/Cinnamon-all..."
-sudo xbps-install -y xorg
-sudo xbps-install -y octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal-gtk xdg-user-dirs xdg-user-dirs-gtk xdg-utils
-# Install extra tools required for theme/icon extraction (.deb helpers & xz)
-sudo xbps-install -y wget binutils xz hicolor-icon-theme
-sleep 1
-
-# Apply patch to Cinnamon's Spices.py to fix the downloads tab
-echo "Applying patch to Spices.py for Cinnamon's download tab..."
-sudo python3 -c "
+# Cinnamon Spices.py Patch
+if [ -f "/usr/share/cinnamon/cinnamon-settings/bin/Spices.py" ]; then
+    echo "Applying patch to Spices.py for Cinnamon's download tab..."
+    python3 -c "
 import os
 path = '/usr/share/cinnamon/cinnamon-settings/bin/Spices.py'
-if os.path.exists(path):
-    with open(path, 'r') as f:
-        content = f.read()
-    old_code = 'totalSize = int(response.headers.get(\'content-length\'))'
-    new_code = 'content_length = response.headers.get(\'content-length\')\n            totalSize = int(content_length) if content_length is not None else -1'
-    if old_code in content:
-        with open(path, 'w') as f:
-            f.write(content.replace(old_code, new_code))
+with open(path, 'r') as f:
+    content = f.read()
+old_code = 'totalSize = int(response.headers.get(\'content-length\'))'
+new_code = 'content_length = response.headers.get(\'content-length\')\n            totalSize = int(content_length) if content_length is not None else -1'
+if old_code in content:
+    with open(path, 'w') as f:
+        f.write(content.replace(old_code, new_code))
 "
-sleep 1
+fi
 
-# Printer support
-clear
-echo "Installing printer support..."
-sudo xbps-install -y cups cups-filters gutenprint system-config-printer
-sudo ln -s /etc/sv/cupsd /var/service/
-sudo xbps-install -y gnome-system-tools users-admin
-sleep 1
+# Printer Support and Filesystems
+echo "==> Installing printer support and additional tools..."
+xbps-install -y cups cups-filters gutenprint system-config-printer gnome-system-tools users-admin \
+                exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez GPaste \
+                topgrade noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
 
-# Filesystem & additional tools
-clear
-echo "Installing additional tools..."
-sudo xbps-install -y exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez GPaste
-# Activate bluetoothd service
-sudo ln -s /etc/sv/bluetoothd /var/service/
-sleep 1
+for svc in cupsd bluetoothd; do
+    if [ ! -L "/var/service/$svc" ]; then
+        ln -s "/etc/sv/$svc" /var/service/
+    fi
+done
 
-# Update tool
-clear
-echo "Installing topgrade..."
-sudo xbps-install -y topgrade
-sleep 1
+# User Applications
+echo "==> Installing user software..."
+xbps-install -y firefox xfce4-terminal firefox-i18n-en-US gnome-calendar qalculate-gtk \
+                smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx
 
-# Fonts
-clear
-echo "Installing fonts..."
-sudo xbps-install -y noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
-sleep 1
+if ! grep -q "^QT_QPA_PLATFORMTHEME=" /etc/environment; then
+    echo "QT_QPA_PLATFORMTHEME=qt5ct" >> /etc/environment
+fi
 
-# Essential software (Using US English Firefox language pack)
-clear
-echo "Installing software..."
-sudo xbps-install -y firefox xfce4-terminal firefox-i18n-en-US gnome-calendar qalculate-gtk smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx
-sleep 1
-
-# QT environment variable
-echo "Configuring QT_QPA_PLATFORMTHEME variable..."
-echo "QT_QPA_PLATFORMTHEME=qt5ct" | sudo tee -a /etc/environment > /dev/null
-
-# XFCE Terminal Configuration
+# ------------------------------------------------------------------------------
+# 9. Optional XFCE Terminal Customization
+# ------------------------------------------------------------------------------
 clear
 echo "Do you want to apply visual customization to xfce4-terminal (transparency and font)?"
 echo "Y) Yes"
@@ -192,7 +182,7 @@ echo "N) No"
 
 personalizar_terminal=""
 while true; do
-    read -p "Please select [Y/N]: " input_val
+    read -r -p "Please select [Y/N]: " input_val
     if [[ "$input_val" =~ ^[yY]$ ]]; then
         personalizar_terminal="yes"
         break
@@ -206,10 +196,9 @@ done
 
 if [ "$personalizar_terminal" = "yes" ]; then
     echo "Configuring xfce4-terminal visual profile..."
-    mkdir -p ~/.config/xfce4/xfconf/xfce-perchannel-xml
-    cat << 'EOF' > ~/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml
+    mkdir -p "$REAL_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
+    cat << 'EOF' > "$REAL_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml"
 <?xml version="1.1" encoding="UTF-8"?>
-
 <channel name="xfce4-terminal" version="1.0">
   <property name="background-mode" type="string" value="TERMINAL_BACKGROUND_TRANSPARENT"/>
   <property name="background-darkness" type="double" value="0"/>
@@ -226,15 +215,14 @@ if [ "$personalizar_terminal" = "yes" ]; then
   <property name="color-palette" type="string" value="rgb(0,0,0);rgb(170,0,0);rgb(0,170,0);rgb(170,85,0);rgb(0,0,170);rgb(170,0,170);rgb(0,170,170);rgb(170,170,170);rgb(85,85,85);rgb(255,85,85);rgb(85,255,85);rgb(255,255,85);rgb(85,85,255);rgb(255,85,255);rgb(85,255,255);rgb(255,255,255)"/>
 </channel>
 EOF
-else
-    echo "xfce4-terminal customization skipped. Default appearance will be kept."
+    chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.config/xfce4"
 fi
-sleep 1
 
-# Native US International/Standard Keyboard X11
-echo "Enabling US keyboard layout in X11..."
-sudo mkdir -p /etc/X11/xorg.conf.d
-sudo tee /etc/X11/xorg.conf.d/30-scrolllock.conf > /dev/null << 'EOF'
+# ------------------------------------------------------------------------------
+# 10. Keyboard Layout, X11, and Autostart
+# ------------------------------------------------------------------------------
+mkdir -p /etc/X11/xorg.conf.d
+cat << 'EOF' > /etc/X11/xorg.conf.d/30-scrolllock.conf
 Section "InputClass"
     Identifier "system-keyboard"
     MatchIsKeyboard "on"
@@ -243,51 +231,50 @@ Section "InputClass"
 EndSection
 EOF
 
-# Autostart NumLock for Cinnamon
-echo "Creating NumLock autostart entry for Cinnamon..."
-mkdir -p ~/.config/autostart
-cat << 'EOF' > ~/.config/autostart/numlockx.desktop
-[Desktop Entry]
-Type=Application
-Name=NumLock
-Exec=numlockx on
-X-GNOME-Autostart-enabled=true
-EOF
+# ------------------------------------------------------------------------------
+# 11. Secure Download of Linux Mint Themes
+# ------------------------------------------------------------------------------
+echo "==> Downloading and installing Linux Mint themes, icons, and cursors..."
+mkdir -p "$REAL_HOME/.themes" "$REAL_HOME/.icons"
 
-# Download and install Linux Mint Themes, Icons, and Cursors for the user
-echo "Downloading and installing Linux Mint themes, icons, and cursors..."
-mkdir -p ~/.themes ~/.icons
+download_and_extract_deb() {
+    local url="$1"
+    local pkg_name
+    pkg_name=$(basename "$url")
 
-# 1. Mint-Themes (v2.4.2)
-wget -q http://packages.linuxmint.com/pool/main/m/mint-themes/mint-themes_2.4.2_all.deb
-ar x mint-themes_2.4.2_all.deb
-tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/themes/*'
-mv usr/share/themes/* ~/.themes/
-rm -rf usr data.tar.xz control.tar.xz debian-binary mint-themes_2.4.2_all.deb
+    echo "Downloading $pkg_name..."
+    cd "$TMP_DIR"
+    wget -q "$url"
+    ar x "$pkg_name"
+    tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/*'
+}
 
-# 2. Mint-Y-Icons (v1.9.6)
-wget -q http://packages.linuxmint.com/pool/main/m/mint-y-icons/mint-y-icons_1.9.6_all.deb
-ar x mint-y-icons_1.9.6_all.deb
-tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/icons/*'
-mv usr/share/icons/* ~/.icons/
-rm -rf usr data.tar.xz control.tar.xz debian-binary mint-y-icons_1.9.6_all.deb
+download_and_extract_deb "http://packages.linuxmint.com/pool/main/m/mint-themes/mint-themes_2.4.2_all.deb"
+if [ -d "$TMP_DIR/usr/share/themes" ]; then
+    cp -r "$TMP_DIR/usr/share/themes/"* "$REAL_HOME/.themes/"
+    rm -rf "${TMP_DIR:?}"/*
+fi
 
-# 3. Mint-Cursor-Themes (v1.0.2)
-wget -q http://packages.linuxmint.com/pool/main/m/mint-cursor-themes/mint-cursor-themes_1.0.2_all.deb
-ar x mint-cursor-themes_1.0.2_all.deb
-tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/icons/*'
-mv usr/share/icons/* ~/.icons/
-rm -rf usr data.tar.xz control.tar.xz debian-binary mint-cursor-themes_1.0.2_all.deb
+download_and_extract_deb "http://packages.linuxmint.com/pool/main/m/mint-y-icons/mint-y-icons_1.9.6_all.deb"
+if [ -d "$TMP_DIR/usr/share/icons" ]; then
+    cp -r "$TMP_DIR/usr/share/icons/"* "$REAL_HOME/.icons/"
+    rm -rf "${TMP_DIR:?}"/*
+fi
 
-# Create a script that sets US keyboard layout, Mint-Y theme, and US clock format after login
-echo "Creating autostart script for custom settings..."
-cat <<EOL > /home/$USER/set-keyboard.sh
+download_and_extract_deb "http://packages.linuxmint.com/pool/main/m/mint-cursor-themes/mint-cursor-themes_1.0.2_all.deb"
+if [ -d "$TMP_DIR/usr/share/icons" ]; then
+    cp -r "$TMP_DIR/usr/share/icons/"* "$REAL_HOME/.icons/"
+    rm -rf "${TMP_DIR:?}"/*
+fi
+
+chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.themes" "$REAL_HOME/.icons"
+
+# User Initialization Script
+cat <<EOL > "$REAL_HOME/set-keyboard.sh"
 #!/bin/bash
-# Set US keyboard layout, Mint-Y-Dark theme, and US clock format on session start
 gsettings set org.cinnamon.desktop.input-sources sources "[('xkb', 'us')]"
 gsettings set org.cinnamon.desktop.background picture-uri 'file:///usr/share/backgrounds/cinnamon_background.jpg'
 
-# Apply Mint-Y-Dark theme settings
 gsettings set org.cinnamon.desktop.interface gtk-theme 'Mint-Y-Dark'
 gsettings set org.cinnamon.desktop.wm.preferences theme 'Mint-Y-Dark'
 gsettings set org.cinnamon.theme name 'Mint-Y-Dark'
@@ -295,33 +282,31 @@ gsettings set org.cinnamon.desktop.interface icon-theme 'Mint-Y'
 gsettings set org.cinnamon.desktop.interface cursor-theme 'Mint-Y'
 gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
 
-# Configure clock applet format (24h time with US date format mm/dd/yyyy)
 gsettings set org.cinnamon.desktop.interface clock-use-24h true
 gsettings set org.cinnamon.desktop.interface clock-show-seconds true
 gsettings set org.cinnamon.muffin.window-picker-style custom-format
 gsettings set org.cinnamon.desktop.interface clock-custom-format '%H:%M:%S\n%m/%d/%Y'
 
-# Delete autostart entry after first execution
 rm -f ~/.config/autostart/set-keyboard.desktop
-echo "Custom configurations have been applied."
 EOL
 
-# Make script executable
-chmod +x /home/$USER/set-keyboard.sh
+chmod +x "$REAL_HOME/set-keyboard.sh"
+chown "$REAL_USER:$REAL_USER" "$REAL_HOME/set-keyboard.sh"
 
-# Create autostart file that executes the script
-mkdir -p ~/.config/autostart
-cat <<EOL > ~/.config/autostart/set-keyboard.desktop
+# Autostart Entries
+AUTOSTART_DIR="$REAL_HOME/.config/autostart"
+mkdir -p "$AUTOSTART_DIR"
+
+cat <<EOL > "$AUTOSTART_DIR/set-keyboard.desktop"
 [Desktop Entry]
 Type=Application
-Exec=/home/$USER/set-keyboard.sh
+Exec=$REAL_HOME/set-keyboard.sh
 Name=Set Mint Customization and Keyboard
-Comment=Set the default US keyboard layout, Mint themes, and clock format after login
+Comment=Set default US keyboard layout, Mint themes, and clock format after login
 X-GNOME-Autostart-enabled=true
 EOL
 
-# Create .desktop file for octoxbps-notifier
-cat > ~/.config/autostart/octoxbps-notifier.desktop <<EOL
+cat <<EOL > "$AUTOSTART_DIR/octoxbps-notifier.desktop"
 [Desktop Entry]
 Type=Application
 Exec=/bin/octoxbps-notifier
@@ -329,11 +314,9 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=OctoXBPS Notifier
-Comment=Start OctoXBPS Update Notifier automatically
 EOL
 
-# Create .desktop file for US keyboard
-cat > ~/.config/autostart/x11kb-us.desktop <<EOL
+cat <<EOL > "$AUTOSTART_DIR/x11kb-us.desktop"
 [Desktop Entry]
 Type=Application
 Exec=/usr/bin/setxkbmap us
@@ -341,11 +324,9 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=X11-KB-US
-Comment=Activate US keyboard under X11
 EOL
 
-# Create .desktop file for automount script (udisks2)
-cat > ~/.config/autostart/automount-udisks2.desktop <<EOL
+cat <<EOL > "$AUTOSTART_DIR/automount-udisks2.desktop"
 [Desktop Entry]
 Type=Application
 Exec=/usr/bin/mount_disks.sh 
@@ -353,11 +334,9 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=X11-automount-udisks2
-Comment=Automount script for udisks2
 EOL
 
-# Create .desktop file for GPaste Daemon
-cat > ~/.config/autostart/gpaste-daemon.desktop <<EOL
+cat <<EOL > "$AUTOSTART_DIR/gpaste-daemon.desktop"
 [Desktop Entry]
 Type=Application
 Exec=/usr/bin/gpaste-client daemon
@@ -365,101 +344,94 @@ Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
 Name=GPaste Daemon
-Comment=Start GPaste daemon automatically
 EOL
 
-echo "Autostart script created. Script finished."
+chown -R "$REAL_USER:$REAL_USER" "$AUTOSTART_DIR"
 
-# Login manager configuration
-clear
-echo "Installing LightDM..."
-sudo xbps-install -y lightdm lightdm-gtk-greeter lightdm-gtk-greeter-settings
-sudo ln -s /etc/sv/lightdm/ /var/service/
-sleep 1
+# ------------------------------------------------------------------------------
+# 12. Display Manager (LightDM)
+# ------------------------------------------------------------------------------
+echo "==> Configuring LightDM..."
+xbps-install -y lightdm lightdm-gtk-greeter lightdm-gtk-greeter-settings
 
-# Configure LightDM background and Theme
-sudo tee -a /etc/lightdm/lightdm-gtk-greeter.conf > /dev/null << 'EOF'
+if [ ! -L "/var/service/lightdm" ]; then
+    ln -s /etc/sv/lightdm/ /var/service/
+fi
+
+cat << 'EOF' > /etc/lightdm/lightdm-gtk-greeter.conf
 [greeter]
 background=/usr/share/backgrounds/lightdmbackground.jpg
 theme-name=Adwaita-dark
 icon-theme-name=Adwaita
 EOF
 
-# Unified LightDM Greeter script for Scroll Lock and NumLock
-echo "Configuring LightDM startup script..."
-sudo tee /usr/local/bin/lightdm-greeter-setup.sh > /dev/null << 'EOF'
+cat << 'EOF' > /usr/local/bin/lightdm-greeter-setup.sh
 #!/bin/bash
 /usr/bin/setxkbmap -option scrolllock:mod3
 /usr/bin/numlockx on
 EOF
-sudo chmod +x /usr/local/bin/lightdm-greeter-setup.sh
+chmod +x /usr/local/bin/lightdm-greeter-setup.sh
 
-sudo mkdir -p /etc/lightdm/lightdm.conf.d
-sudo tee /etc/lightdm/lightdm.conf.d/60-custom-greeter.conf > /dev/null << 'EOF'
+mkdir -p /etc/lightdm/lightdm.conf.d
+cat << 'EOF' > /etc/lightdm/lightdm.conf.d/60-custom-greeter.conf
 [Seat:*]
 greeter-setup-script=/usr/local/bin/lightdm-greeter-setup.sh
 EOF
 
-# Setup Autostart - pipewire & wireplumber
-sudo mkdir -p /etc/pipewire/pipewire.conf.d
-sudo ln -s /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pipewire.conf.d/
-sudo ln -s /usr/share/examples/pipewire/20-pipewire-pulse.conf /etc/pipewire/pipewire.conf.d/
-sudo ln -s /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
-sleep 1
+# Pipewire Autostart Config
+mkdir -p /etc/pipewire/pipewire.conf.d
+[ -f /usr/share/examples/wireplumber/10-wireplumber.conf ] && ln -sf /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pipewire.conf.d/
+[ -f /usr/share/examples/pipewire/20-pipewire-pulse.conf ] && ln -sf /usr/share/examples/wireplumber/20-pipewire-pulse.conf /etc/pipewire/pipewire.conf.d/
+[ -f /usr/share/applications/pipewire.desktop ] && ln -sf /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
 
-# GRUB Configuration
+# ------------------------------------------------------------------------------
+# 13. GRUB Configuration
+# ------------------------------------------------------------------------------
+echo "==> Configuring GRUB..."
+sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
+
 clear
-echo "Configuring GRUB..."
-sudo sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
-sudo sed -i 's/.*GRUB_COLOR_NORMAL=.*/GRUB_COLOR_NORMAL="light-blue\/black"/' /etc/default/grub
-
 echo "Do you want to skip GRUB countdown and boot automatically?"
 echo "Notice: If you use a laptop and it has a ghost key / firmware issue,"
 echo "and you do not want to confirm the boot entry every time,"
 echo "it is necessary to apply this change to skip the menu."
 echo "1) Yes, boot directly and skip countdown"
 echo "0) No, keep standard countdown and display menu"
-read -p "Please select (0 or 1): " pular_grub
+read -r -p "Please select (0 or 1): " pular_grub
 
-if [ "$tipo_maquina" = "1" ] \vert{}\vert{} [ "$pular_grub" = "1" ]
-then
+if [ "$tipo_maquina" = "1" ] || [ "$pular_grub" = "1" ]; then
     echo "Applying direct boot configuration..."
-    sudo sed -i 's/.*GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
+    sed -i 's/.*GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
 else
     echo "Keeping default GRUB countdown..."
-    sudo sed -i 's/.*GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
+    sed -i 's/.*GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/' /etc/default/grub
 fi
 
-sudo update-grub || sudo grub-mkconfig -o /boot/grub/grub.cfg
-sleep 1
-
-# Configure system locales globally (en_US.UTF-8, LC_TIME and LC_COLLATE=C)
-echo "Configuring system locales..."
-sudo sed -i 's/^[[:space:]]*#[[:space:]]*\(en_US\.UTF-8[[:space:]]\+UTF-8\)/\1/' /etc/default/libc-locales
-sudo xbps-reconfigure -f glibc-locales
-
-sudo touch /etc/locale.conf
-
-if grep -q "^LANG=" /etc/locale.conf; then
-    sudo sed -i 's/^LANG=.*/LANG=en_US.UTF-8/' /etc/locale.conf
+if command -v update-grub >/dev/null 2>&1; then
+    update-grub
 else
-    echo "LANG=en_US.UTF-8" | sudo tee -a /etc/locale.conf > /dev/null
+    grub-mkconfig -o /boot/grub/grub.cfg
 fi
 
-if grep -q "^LC_TIME=" /etc/locale.conf; then
-    sudo sed -i 's/^LC_TIME=.*/LC_TIME=en_US.UTF-8/' /etc/locale.conf
-else
-    echo "LC_TIME=en_US.UTF-8" | sudo tee -a /etc/locale.conf > /dev/null
+# ------------------------------------------------------------------------------
+# 14. System Locales (en_US.UTF-8)
+# ------------------------------------------------------------------------------
+echo "==> Configuring system locales..."
+sed -i 's/^[[:space:]]*#[[:space:]]*\(en_US\.UTF-8[[:space:]]\+UTF-8\)/\1/' /etc/default/libc-locales
+xbps-reconfigure -f glibc-locales
+
+touch /etc/locale.conf
+{
+    echo "LANG=en_US.UTF-8"
+    echo "LC_TIME=en_US.UTF-8"
+    echo "LC_COLLATE=C"
+} > /etc/locale.conf
+
+if [ -f "$SCRIPT_DIR/10-mount-drives.rules" ]; then
+    mkdir -p /etc/polkit-1/rules.d/
+    cp "$SCRIPT_DIR/10-mount-drives.rules" /etc/polkit-1/rules.d/
 fi
 
-if grep -q "^LC_COLLATE=" /etc/locale.conf; then
-    sudo sed -i 's/^LC_COLLATE=.*/LC_COLLATE=C/' /etc/locale.conf
-else
-    echo "LC_COLLATE=C" | sudo tee -a /etc/locale.conf > /dev/null
-fi
-
-# Setup automount for SSDs/HDDs
-sudo cp ~/void/10-mount-drives.rules /etc/polkit-1/rules.d/
-clear
-echo "Setup finished - system is ready to be rebooted"
-echo "Use sudo reboot"
+echo "=============================================================================="
+echo " Setup complete! The system is successfully configured and ready to reboot."
+echo "=============================================================================="

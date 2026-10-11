@@ -219,7 +219,57 @@ EOF
 fi
 
 # ------------------------------------------------------------------------------
-# 10. Keyboard Layout, X11, and Autostart
+# 10. File Manager Selection (Nemo, Thunar, or Nautilus)
+# ------------------------------------------------------------------------------
+clear
+echo "=============================================================================="
+echo "                     FILE MANAGER SELECTION"
+echo "=============================================================================="
+echo "Cinnamon installs Nemo by default. Choose which file manager you want to use:"
+echo ""
+echo "0) Keep Nemo (Cinnamon default)"
+echo "   -> Note: On Void Linux, Nemo lacks 'Bulky' (bulk renamer)"
+echo "      as it depends on X-apps modules not fully ported to Void yet."
+echo ""
+echo "1) Thunar (XFCE) [RECOMMENDED]"
+echo "   -> Includes xarchiver and unrar integration."
+echo "   -> If selected, Nemo and file-roller will be removed (via -Fy)."
+echo ""
+echo "2) Nautilus (GNOME)"
+echo "   -> Warning: Nautilus does not come with unrar pre-installed. Even if you"
+echo "      decide to install unrar later to handle .rar files,"
+echo "      it still cannot extract password-protected .rar files."
+echo "   -> If selected, Nemo will be removed (via -Fy)."
+echo "=============================================================================="
+read -r -p "Please select an option [0-2]: " fm_choice
+
+case "$fm_choice" in
+    1)
+        echo "Installing Thunar and compression tools..."
+        xbps-install -y Thunar thunar-archive-plugin xarchiver unrar
+
+        echo "Removing Nemo and file-roller forcefully (-Fy)..."
+        xbps-remove -Fy nemo file-roller
+
+        xdg-mime default thunar.desktop inode/directory application/x-gnome-saved-search
+        ;;
+    2)
+        echo "Installing Nautilus..."
+        xbps-install -y nautilus
+
+        echo "Removing Nemo forcefully (-Fy)..."
+        xbps-remove -Fy nemo
+
+        xdg-mime default org.gnome.Nautilus.desktop inode/directory application/x-gnome-saved-search
+        ;;
+    0|*)
+        echo "Keeping Nemo as the default file manager."
+        ;;
+esac
+sleep 1
+
+# ------------------------------------------------------------------------------
+# 11. Keyboard Layout, X11, and Autostart
 # ------------------------------------------------------------------------------
 mkdir -p /etc/X11/xorg.conf.d
 cat << 'EOF' > /etc/X11/xorg.conf.d/30-scrolllock.conf
@@ -232,7 +282,7 @@ EndSection
 EOF
 
 # ------------------------------------------------------------------------------
-# 11. Secure Download of Linux Mint Themes
+# 12. Secure Download of Linux Mint Themes
 # ------------------------------------------------------------------------------
 echo "==> Downloading and installing Linux Mint themes, icons, and cursors..."
 mkdir -p "$REAL_HOME/.themes" "$REAL_HOME/.icons"
@@ -349,7 +399,7 @@ EOL
 chown -R "$REAL_USER:$REAL_USER" "$AUTOSTART_DIR"
 
 # ------------------------------------------------------------------------------
-# 12. Display Manager (LightDM)
+# 13. Display Manager (LightDM)
 # ------------------------------------------------------------------------------
 echo "==> Configuring LightDM..."
 xbps-install -y lightdm lightdm-gtk-greeter lightdm-gtk-greeter-settings
@@ -385,7 +435,7 @@ mkdir -p /etc/pipewire/pipewire.conf.d
 [ -f /usr/share/applications/pipewire.desktop ] && ln -sf /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
 
 # ------------------------------------------------------------------------------
-# 13. GRUB Configuration
+# 14. GRUB Configuration
 # ------------------------------------------------------------------------------
 echo "==> Configuring GRUB..."
 sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
@@ -414,7 +464,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 14. System Locales (en_US.UTF-8)
+# 15. System Locales (en_US.UTF-8)
 # ------------------------------------------------------------------------------
 echo "==> Configuring system locales..."
 sed -i 's/^[[:space:]]*#[[:space:]]*\(en_US\.UTF-8[[:space:]]\+UTF-8\)/\1/' /etc/default/libc-locales

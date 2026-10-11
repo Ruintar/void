@@ -219,7 +219,57 @@ EOF
 fi
 
 # ------------------------------------------------------------------------------
-# 10. Configuración de Teclado, X11 y Autostart
+# 10. Selección del Administrador de Archivos (Nemo, Thunar o Nautilus)
+# ------------------------------------------------------------------------------
+clear
+echo "=============================================================================="
+echo "                 SELECCIÓN DEL ADMINISTRADOR DE ARCHIVOS"
+echo "=============================================================================="
+echo "Cinnamon instala Nemo por defecto. Elija qué administrador desea utilizar:"
+echo ""
+echo "0) Mantener Nemo (Predeterminado de Cinnamon)"
+echo "   -> Nota: En Void Linux, Nemo no incluye 'Bulky' (renombrador masivo)"
+echo "      ya que depende de módulos de X-apps que aún no están totalmente portados a Void."
+echo ""
+echo "1) Thunar (XFCE) [RECOMENDADO]"
+echo "   -> Incluye integración con xarchiver y unrar."
+echo "   -> Si se selecciona, Nemo y file-roller serán eliminados (vía -Fy)."
+echo ""
+echo "2) Nautilus (GNOME)"
+echo "   -> Aviso: Nautilus no viene con unrar preinstalado. E incluso si decide"
+echo "      instalar unrar posteriormente para gestionar archivos .rar,"
+echo "      no puede extraer archivos .rar protegidos con contraseña."
+echo "   -> Si se selecciona, Nemo será eliminado (vía -Fy)."
+echo "=============================================================================="
+read -r -p "Por favor, seleccione una opción [0-2]: " fm_choice
+
+case "$fm_choice" in
+    1)
+        echo "Instalando Thunar y herramientas de compresión..."
+        xbps-install -y Thunar thunar-archive-plugin xarchiver unrar
+
+        echo "Eliminando Nemo y file-roller de forma forzada (-Fy)..."
+        xbps-remove -Fy nemo file-roller
+
+        xdg-mime default thunar.desktop inode/directory application/x-gnome-saved-search
+        ;;
+    2)
+        echo "Instalando Nautilus..."
+        xbps-install -y nautilus
+
+        echo "Eliminando Nemo de forma forzada (-Fy)..."
+        xbps-remove -Fy nemo
+
+        xdg-mime default org.gnome.Nautilus.desktop inode/directory application/x-gnome-saved-search
+        ;;
+    0|*)
+        echo "Manteniendo Nemo como el administrador de archivos predeterminado."
+        ;;
+esac
+sleep 1
+
+# ------------------------------------------------------------------------------
+# 11. Configuración de Teclado, X11 y Autostart
 # ------------------------------------------------------------------------------
 mkdir -p /etc/X11/xorg.conf.d
 cat << 'EOF' > /etc/X11/xorg.conf.d/30-scrolllock.conf
@@ -232,7 +282,7 @@ EndSection
 EOF
 
 # ------------------------------------------------------------------------------
-# 11. Descarga Segura de Temas de Linux Mint
+# 12. Descarga Segura de Temas de Linux Mint
 # ------------------------------------------------------------------------------
 echo "==> Descargando e instalando temas, iconos y cursores de Linux Mint..."
 mkdir -p "$REAL_HOME/.themes" "$REAL_HOME/.icons"
@@ -349,7 +399,7 @@ EOL
 chown -R "$REAL_USER:$REAL_USER" "$AUTOSTART_DIR"
 
 # ------------------------------------------------------------------------------
-# 12. Administrador de Inicio de Sesión (LightDM)
+# 13. Administrador de Inicio de Sesión (LightDM)
 # ------------------------------------------------------------------------------
 echo "==> Configurando LightDM..."
 xbps-install -y lightdm lightdm-gtk-greeter lightdm-gtk-greeter-settings
@@ -381,11 +431,11 @@ EOF
 # Pipewire Autostart Config
 mkdir -p /etc/pipewire/pipewire.conf.d
 [ -f /usr/share/examples/wireplumber/10-wireplumber.conf ] && ln -sf /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pipewire.conf.d/
-[ -f /usr/share/examples/pipewire/20-pipewire-pulse.conf ] && ln -sf /usr/share/examples/pipewire/20-pipewire-pulse.conf /etc/pipewire/pipewire.conf.d/
+[ -f /usr/share/examples/pipewire/20-pipewire-pulse.conf ] && ln -sf /usr/share/examples/wireplumber/20-pipewire-pulse.conf /etc/pipewire/pipewire.conf.d/
 [ -f /usr/share/applications/pipewire.desktop ] && ln -sf /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
 
 # ------------------------------------------------------------------------------
-# 13. Configuración de GRUB
+# 14. Configuración de GRUB
 # ------------------------------------------------------------------------------
 echo "==> Configurando GRUB..."
 sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
@@ -414,7 +464,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 14. Locales del Sistema (es_ES.UTF-8)
+# 15. Locales del Sistema (es_ES.UTF-8)
 # ------------------------------------------------------------------------------
 echo "==> Configurando los locales del sistema..."
 sed -i 's/^[[:space:]]*#[[:space:]]*\(es_ES\.UTF-8[[:space:]]\+UTF-8\)/\1/' /etc/default/libc-locales

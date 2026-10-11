@@ -219,7 +219,57 @@ EOF
 fi
 
 # ------------------------------------------------------------------------------
-# 10. Configurações de Teclado, X11 e Autostart
+# 10. Seleção do Gerenciador de Arquivos (Nemo, Thunar ou Nautilus)
+# ------------------------------------------------------------------------------
+clear
+echo "=============================================================================="
+echo "                   SELEÇÃO DO GERENCIADOR DE ARQUIVOS"
+echo "=============================================================================="
+echo "O Cinnamon instala o Nemo por padrão. Escolha qual gerenciador deseja utilizar:"
+echo ""
+echo "0) Manter o Nemo (Padrão do Cinnamon)"
+echo "   -> Nota: No Void Linux, o Nemo não possui o 'Bulky' (renomeador em massa)"
+echo "      pois depende de módulos dos X-apps não totalmente portados para o Void."
+echo ""
+echo "1) Thunar (XFCE) [RECOMENDADO]"
+echo "   -> Inclui integração com xarchiver e unrar."
+echo "   -> Se selecionado, o Nemo e o file-roller serão removidos (via -Fy)."
+echo ""
+echo "2) Nautilus (GNOME)"
+echo "   -> Aviso: O Nautilus não vem com o unrar pré-instalado. E mesmo que o usuário"
+echo "      decida instalar o unrar posteriormente para lidar com arquivos .rar,"
+echo "      ele não consegue extrair arquivos .rar protegidos por senha."
+echo "   -> Se selecionado, o Nemo será removido (via -Fy)."
+echo "=============================================================================="
+read -r -p "Selecione uma opção [0-2]: " fm_choice
+
+case "$fm_choice" in
+    1)
+        echo "Instalando Thunar e ferramentas de compactação..."
+        xbps-install -y Thunar thunar-archive-plugin xarchiver unrar
+
+        echo "Removendo Nemo e file-roller de forma forçada (-Fy)..."
+        xbps-remove -Fy nemo file-roller
+
+        xdg-mime default thunar.desktop inode/directory application/x-gnome-saved-search
+        ;;
+    2)
+        echo "Instalando Nautilus..."
+        xbps-install -y nautilus
+
+        echo "Removendo Nemo de forma forçada (-Fy)..."
+        xbps-remove -Fy nemo
+
+        xdg-mime default org.gnome.Nautilus.desktop inode/directory application/x-gnome-saved-search
+        ;;
+    0|*)
+        echo "Mantendo o Nemo como gerenciador de arquivos padrão."
+        ;;
+esac
+sleep 1
+
+# ------------------------------------------------------------------------------
+# 11. Configurações de Teclado, X11 e Autostart
 # ------------------------------------------------------------------------------
 mkdir -p /etc/X11/xorg.conf.d
 cat << 'EOF' > /etc/X11/xorg.conf.d/30-scrolllock.conf
@@ -233,7 +283,7 @@ EndSection
 EOF
 
 # ------------------------------------------------------------------------------
-# 11. Download Seguro de Temas do Linux Mint
+# 12. Download Seguro de Temas do Linux Mint
 # ------------------------------------------------------------------------------
 echo "==> Baixando e instalando temas, ícones e cursores do Linux Mint..."
 mkdir -p "$REAL_HOME/.themes" "$REAL_HOME/.icons"
@@ -350,7 +400,7 @@ EOL
 chown -R "$REAL_USER:$REAL_USER" "$AUTOSTART_DIR"
 
 # ------------------------------------------------------------------------------
-# 12. Display Manager (LightDM)
+# 13. Display Manager (LightDM)
 # ------------------------------------------------------------------------------
 echo "==> Configurando LightDM..."
 xbps-install -y lightdm lightdm-gtk-greeter lightdm-gtk-greeter-settings
@@ -386,7 +436,7 @@ mkdir -p /etc/pipewire/pipewire.conf.d
 [ -f /usr/share/applications/pipewire.desktop ] && ln -sf /usr/share/applications/pipewire.desktop /etc/xdg/autostart/
 
 # ------------------------------------------------------------------------------
-# 13. Configuração do GRUB
+# 14. Configuração do GRUB
 # ------------------------------------------------------------------------------
 echo "==> Configurando o GRUB..."
 sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
@@ -415,7 +465,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 14. Locale do Sistema (pt_BR.UTF-8)
+# 15. Locale do Sistema (pt_BR.UTF-8)
 # ------------------------------------------------------------------------------
 echo "==> Configurando locales do sistema..."
 sed -i 's/^[[:space:]]*#[[:space:]]*\(pt_BR\.UTF-8[[:space:]]\+UTF-8\)/\1/' /etc/default/libc-locales

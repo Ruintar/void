@@ -4,25 +4,19 @@
 
 echo "Starting the automount script... / Iniciando o script de automount..."
 
-# Find all partitions with a filesystem (only check 'part' and 'fstype')
-# Encontrar todas as partições com um sistema de arquivos (verificar apenas 'part' e 'fstype')
 for dev in $(lsblk -lnpo NAME,FSTYPE,TYPE | awk '$2 && $3 == "part" {print $1}'); do
     echo "Checking device: $dev / Verificando dispositivo: $dev"
 
-    # Check if the filesystem is vfat or ntfs
-    # Verificar se o sistema de arquivos é vfat ou ntfs
     fstype=$(lsblk -no FSTYPE "$dev")
-    
-    # Skip vfat and ntfs partitions
-    # Pular partições vfat e ntfs
+
     if [[ "$fstype" == "vfat" || "$fstype" == "ntfs" ]]; then
         echo "Skipping partition with $fstype: $dev / Pulando partição com $fstype: $dev"
         continue
     fi
 
-    # Check if the partition is already mounted
-    # Verificar se a partição já está montada
-    if ! mount | grep -q "$dev"; then
+    # findmnt: exact match on mount source (avoids false positives like sda1 matching sda10)
+    # findmnt: correspondência exata na origem (evita falso positivo tipo sda1 casando com sda10)
+    if ! findmnt -rn -S "$dev" > /dev/null; then
         echo "Mounting $dev... / Montando $dev..."
         udisksctl mount -b "$dev" || echo "Error mounting $dev / Erro ao montar $dev"
     else

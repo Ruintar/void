@@ -24,6 +24,8 @@ fi
 
 # Directorio temporal seguro para la extracción de paquetes
 TMP_DIR=$(mktemp -d -t void-install-XXXXXX)
+# Permiso de travesía: xdeb se ejecuta como usuario común dentro de este directorio
+chmod 755 "$TMP_DIR"
 
 # Función de limpieza ejecutada al salir o interrumpir (Ctrl+C / Error)
 cleanup() {
@@ -34,7 +36,18 @@ cleanup() {
         echo "El script fue interrumpido o encontró un error durante la ejecución."
     fi
 }
-trap cleanup EXIT INT TERM
+# Corrección: solo EXIT. Con INT/TERM el cleanup se ejecutaba dos veces en Ctrl+C.
+trap cleanup EXIT
+
+# Ejecuta un comando como el usuario real (xdeb no debe ejecutarse como root)
+# -H: garantiza que HOME sea el del usuario real (esencial para xdg-mime y xdeb)
+run_as_user() {
+    if [ "$REAL_USER" != "root" ]; then
+        sudo -H -u "$REAL_USER" "$@"
+    else
+        "$@"
+    fi
+}
 
 # ------------------------------------------------------------------------------
 # 2. Configuración de Shell y Sudoers
@@ -108,8 +121,8 @@ fi
 # ------------------------------------------------------------------------------
 # 6. Servidor de Audio y Bluetooth
 # ------------------------------------------------------------------------------
-echo "==> Instalando PipeWire, WirePlumber y soporte Bluetooth..."
-xbps-install -y pipewire wireplumber pavucontrol pulsemixer libspa-bluetooth blueman bluez-cups
+echo "==> Instalando PipeWire, WirePlumber, RTKit y soporte Bluetooth..."
+xbps-install -y pipewire wireplumber rtkit pavucontrol pulsemixer libspa-bluetooth blueman bluez-cups
 
 # ------------------------------------------------------------------------------
 # 7. Controlador de Video NVIDIA (Opcional)
@@ -135,6 +148,14 @@ echo "==> Instalando XOrg, Cinnamon Desktop y Herramientas..."
 xbps-install -y xorg octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal-gtk \
                 xdg-user-dirs xdg-user-dirs-gtk xdg-utils wget binutils xz hicolor-icon-theme
 
+# Nemo (predeterminado de Cinnamon) + File Roller y soporte de archivos RAR
+# (incluyendo protegidos por contraseña, vía unrar) y 7-Zip, integrados en Nemo
+echo "==> Instalando Nemo, File Roller y soporte de compresión (RAR/7Zip)..."
+xbps-install -y nemo file-roller nemo-fileroller unrar p7zip
+
+# Garantiza Nemo como administrador de archivos predeterminado del usuario
+run_as_user xdg-mime default nemo.desktop inode/directory application/x-gnome-saved-search
+
 # Parche para Spices.py en Cinnamon
 if [ -f "/usr/share/cinnamon/cinnamon-settings/bin/Spices.py" ]; then
     echo "Aplicando parche de corrección en Spices.py..."
@@ -153,9 +174,9 @@ fi
 
 # Soporte de Impresión y Sistemas de Archivos
 echo "==> Instalando soporte para impresoras y herramientas adicionales..."
-xbps-install -y cups cups-filters gutenprint system-config-printer gnome-system-tools users-admin \
+xbps-install -y cups cups-filters gutenprint system-config-printer \
                 exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez GPaste \
-                topgrade noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
+                gnome-disk-utility topgrade noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
 
 for svc in cupsd bluetoothd; do
     if [ ! -L "/var/service/$svc" ]; then
@@ -166,7 +187,7 @@ done
 # Aplicaciones de Usuario
 echo "==> Instalando software de usuario..."
 xbps-install -y firefox xfce4-terminal firefox-i18n-es-ES gnome-calendar qalculate-gtk \
-                smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx
+                smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx gnome-screenshot
 
 if ! grep -q "^QT_QPA_PLATFORMTHEME=" /etc/environment; then
     echo "QT_QPA_PLATFORMTHEME=qt5ct" >> /etc/environment
@@ -219,54 +240,52 @@ EOF
 fi
 
 # ------------------------------------------------------------------------------
-# 10. Selección del Administrador de Archivos (Nemo, Thunar o Nautilus)
+# 10. Renombrador Masivo (Bulky) vía xdeb
 # ------------------------------------------------------------------------------
-clear
-echo "=============================================================================="
-echo "                 SELECCIÓN DEL ADMINISTRADOR DE ARCHIVOS"
-echo "=============================================================================="
-echo "Cinnamon instala Nemo por defecto. Elija qué administrador desea utilizar:"
-echo ""
-echo "0) Mantener Nemo (Predeterminado de Cinnamon)"
-echo "   -> Nota: En Void Linux, Nemo no incluye 'Bulky' (renombrador masivo)"
-echo "      ya que depende de módulos de X-apps que aún no están totalmente portados a Void."
-echo ""
-echo "1) Thunar (XFCE) [RECOMENDADO]"
-echo "   -> Incluye integración con xarchiver y unrar."
-echo "   -> Si se selecciona, Nemo y file-roller serán eliminados (vía -Fy)."
-echo ""
-echo "2) Nautilus (GNOME)"
-echo "   -> Aviso: Nautilus no viene con unrar preinstalado. E incluso si decide"
-echo "      instalar unrar posteriormente para gestionar archivos .rar,"
-echo "      no puede extraer archivos .rar protegidos con contraseña."
-echo "   -> Si se selecciona, Nemo será eliminado (vía -Fy)."
-echo "=============================================================================="
-read -r -p "Por favor, seleccione una opción [0-2]: " fm_choice
+echo "==> Instalando Bulky (renombrador masivo de Linux Mint) vía xdeb..."
 
-case "$fm_choice" in
-    1)
-        echo "Instalando Thunar y herramientas de compresión..."
-        xbps-install -y Thunar thunar-archive-plugin xarchiver unrar
+# Dependencias de xdeb
+xbps-install -y binutils tar curl xbps xz
 
-        echo "Eliminando Nemo y file-roller de forma forzada (-Fy)..."
-        xbps-remove -Fy nemo file-roller
+# Directorio de build (propiedad del usuario real, ya que xdeb no corre como root)
+BULKY_DIR="$TMP_DIR/bulky-build"
+mkdir -p "$BULKY_DIR"
+chown -R "$REAL_USER:$REAL_USER" "$BULKY_DIR"
 
-        xdg-mime default thunar.desktop inode/directory application/x-gnome-saved-search
-        ;;
-    2)
-        echo "Instalando Nautilus..."
-        xbps-install -y nautilus
+# Descarga del .deb de Bulky y de xdeb (HTTPS)
+run_as_user bash -c "
+    set -e
+    cd '$BULKY_DIR'
+    echo 'Descargando bulky_4.2_all.deb...'
+    wget -q 'http://packages.linuxmint.com/pool/main/b/bulky/bulky_4.2_all.deb'
+    echo 'Descargando xdeb...'
+    curl -sLO 'https://github.com/xdeb-org/xdeb/releases/latest/download/xdeb'
+    chmod +x xdeb
+"
 
-        echo "Eliminando Nemo de forma forzada (-Fy)..."
-        xbps-remove -Fy nemo
+# Hace xdeb global
+mv "$BULKY_DIR/xdeb" /usr/local/bin/xdeb
 
-        xdg-mime default org.gnome.Nautilus.desktop inode/directory application/x-gnome-saved-search
-        ;;
-    0|*)
-        echo "Manteniendo Nemo como el administrador de archivos predeterminado."
-        ;;
-esac
-sleep 1
+# Convierte el .deb en paquete xbps (genera el repositorio local 'binpkgs')
+echo "Convirtiendo Bulky (.deb -> xbps) con xdeb..."
+run_as_user bash -c "cd '$BULKY_DIR' && xdeb -Sedf bulky_4.2_all.deb"
+
+# Instala el paquete convertido desde el repositorio local generado por xdeb
+if compgen -G "$BULKY_DIR/binpkgs/bulky-*.xbps" > /dev/null; then
+    echo "Instalando el paquete convertido..."
+    xbps-install -y -R "$BULKY_DIR/binpkgs" -i bulky
+else
+    echo "Error: xdeb no generó el paquete de Bulky en $BULKY_DIR/binpkgs." >&2
+    exit 1
+fi
+
+# Dependencias Python de Bulky (vía xbps, sin pip)
+echo "Instalando dependencias Python (python3-setproctitle, python3-Unidecode)..."
+xbps-install -y python3-setproctitle python3-Unidecode
+
+# Compila los schemas de GLib para que el schema 'org.x.bulky' sea reconocido
+echo "Compilando schemas de GLib..."
+glib-compile-schemas /usr/share/glib-2.0/schemas/
 
 # ------------------------------------------------------------------------------
 # 11. Configuración de Teclado, X11 y Autostart
@@ -299,13 +318,15 @@ download_and_extract_deb() {
     tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/*'
 }
 
+# ATENCIÓN: packages.linuxmint.com NO sirve los .debs de forma confiable vía
+# HTTPS (wget/curl fallan el handshake). HTTP aquí es INTENCIONAL — no cambiar.
 download_and_extract_deb "http://packages.linuxmint.com/pool/main/m/mint-themes/mint-themes_2.4.2_all.deb"
 if [ -d "$TMP_DIR/usr/share/themes" ]; then
     cp -r "$TMP_DIR/usr/share/themes/"* "$REAL_HOME/.themes/"
     rm -rf "${TMP_DIR:?}"/*
 fi
 
-download_and_extract_deb "http://packages.linuxmint.com/pool/main/m/mint-y-icons/mint-y-icons_1.9.6_all.deb"
+download_and_extract_deb "http://packages.linuxmint.com/pool/main/m/mint-y-icons/mint-y-icons_1.9.7_all.deb"
 if [ -d "$TMP_DIR/usr/share/icons" ]; then
     cp -r "$TMP_DIR/usr/share/icons/"* "$REAL_HOME/.icons/"
     rm -rf "${TMP_DIR:?}"/*
@@ -319,9 +340,12 @@ fi
 
 chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.themes" "$REAL_HOME/.icons"
 
-# Script de Inicialización de Usuario
+# Script de Inicialización del Usuario
+# set -e: la entrada de autostart de abajo solo se autoelimina si TODAS las
+# configuraciones se aplican con éxito (si no, reintenta en el próximo login)
 cat <<EOL > "$REAL_HOME/set-keyboard.sh"
 #!/bin/bash
+set -e
 gsettings set org.cinnamon.desktop.input-sources sources "[('xkb', 'es')]"
 gsettings set org.cinnamon.desktop.background picture-uri 'file:///usr/share/backgrounds/cinnamon_background.jpg'
 
@@ -334,14 +358,66 @@ gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
 
 gsettings set org.cinnamon.desktop.interface clock-use-24h true
 gsettings set org.cinnamon.desktop.interface clock-show-seconds true
-gsettings set org.cinnamon.muffin.window-picker-style custom-format
-gsettings set org.cinnamon.desktop.interface clock-custom-format '%H:%M:%S\n%d/%m/%Y'
 
 rm -f ~/.config/autostart/set-keyboard.desktop
 EOL
 
 chmod +x "$REAL_HOME/set-keyboard.sh"
 chown "$REAL_USER:$REAL_USER" "$REAL_HOME/set-keyboard.sh"
+
+# Formato apilado del reloj (applet calendar@cinnamon.org)
+# El applet no lee claves globales ni un JSON de nombre fijo: cada instancia
+# tiene su propio "<instance-id>.json" generado desde settings-schema.json.
+# Estrategia doble: (1) parchear el schema global para instalaciones nuevas;
+# (2) corregir instancias ya creadas (re-ejecuciones / home reutilizado).
+# El formato usa un SALTO DE LÍNEA REAL entre hora y fecha (así lo guarda la
+# GUI de Cinnamon al pegar el formato en dos líneas): el json.dump de Python
+# lo serializa como "\n", que el applet renderiza como dos líneas en el panel.
+# Resultado:  %H:%M:%S   (arriba, con segundos)
+#             %d/%m/%Y   (abajo)
+
+# 1) Schema global del applet (afeta solo instancias aún no creadas)
+CAL_SCHEMA="/usr/share/cinnamon/applets/calendar@cinnamon.org/settings-schema.json"
+if [ -f "$CAL_SCHEMA" ]; then
+    python3 - "$CAL_SCHEMA" << 'PYEOF'
+import json, sys
+path = sys.argv[1]
+with open(path) as f:
+    schema = json.load(f)
+if isinstance(schema.get("use-custom-format"), dict):
+    schema["use-custom-format"]["default"] = True
+if isinstance(schema.get("custom-format"), dict):
+    schema["custom-format"]["default"] = "%H:%M:%S\n%d/%m/%Y"
+with open(path, "w") as f:
+    json.dump(schema, f, indent=4)
+PYEOF
+fi
+
+# 2) Instancias ya creadas (ej.: reinstalaciones sobre el mismo /home)
+CAL_SPICES="$REAL_HOME/.config/cinnamon/spices/calendar@cinnamon.org"
+if [ -d "$CAL_SPICES" ]; then
+    python3 - "$CAL_SPICES" << 'PYEOF'
+import glob, json, sys
+for path in glob.glob(sys.argv[1] + "/*.json"):
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except Exception:
+        continue
+    changed = False
+    if isinstance(data.get("use-custom-format"), dict):
+        data["use-custom-format"]["value"] = True
+        changed = True
+    if isinstance(data.get("custom-format"), dict):
+        data["custom-format"]["value"] = "%H:%M:%S\n%d/%m/%Y"
+        changed = True
+    if changed:
+        # __md5__ permanece como está: checksum antiguo señala edición externa
+        # y hace que el applet recargue los valores del disco.
+        with open(path, "w") as f:
+            json.dump(data, f, indent=4)
+PYEOF
+fi
 
 # Entradas de Autostart
 AUTOSTART_DIR="$REAL_HOME/.config/autostart"
@@ -379,7 +455,7 @@ EOL
 cat <<EOL > "$AUTOSTART_DIR/automount-udisks2.desktop"
 [Desktop Entry]
 Type=Application
-Exec=/usr/bin/mount_disks.sh 
+Exec=/usr/bin/mount_disks.sh
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
@@ -396,7 +472,13 @@ X-GNOME-Autostart-enabled=true
 Name=GPaste Daemon
 EOL
 
-chown -R "$REAL_USER:$REAL_USER" "$AUTOSTART_DIR"
+# ------------------------------------------------------------------------------
+# CORRECCIÓN CRÍTICA: propiedad del ~/.config
+# Este script corre como root y los mkdir -p de arriba pueden haber creado
+# ~/.config como root:root. Sin el usuario como dueño, dconf no puede escribir
+# y TODAS las configuraciones gsettings (tema, fondo, iconos, teclado) fallan en silencio.
+# ------------------------------------------------------------------------------
+chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.config"
 
 # ------------------------------------------------------------------------------
 # 13. Administrador de Inicio de Sesión (LightDM)
@@ -427,6 +509,13 @@ cat << 'EOF' > /etc/lightdm/lightdm.conf.d/60-custom-greeter.conf
 [Seat:*]
 greeter-setup-script=/usr/local/bin/lightdm-greeter-setup.sh
 EOF
+
+# Desbloqueo automático del llavero (gnome-keyring) en el login vía PAM
+# Resuelve el error "keyringPrompt: Failed to show modal dialog" de .xsession-errors
+if [ -f /etc/pam.d/lightdm ] && ! grep -q pam_gnome_keyring /etc/pam.d/lightdm; then
+    sed -i '0,/^auth.*/s//&\nauth        optional    pam_gnome_keyring.so/' /etc/pam.d/lightdm
+    printf '%s\n' 'session     optional    pam_gnome_keyring.so auto_start' >> /etc/pam.d/lightdm
+fi
 
 # Pipewire Autostart Config
 mkdir -p /etc/pipewire/pipewire.conf.d
@@ -481,6 +570,10 @@ if [ -f "$SCRIPT_DIR/10-mount-drives.rules" ]; then
     mkdir -p /etc/polkit-1/rules.d/
     cp "$SCRIPT_DIR/10-mount-drives.rules" /etc/polkit-1/rules.d/
 fi
+
+# Salvaguarda final: garantiza que los schemas de GLib (incluido org.x.bulky)
+# sigan compilados, por si algún paquete instalado después regeneró el caché
+glib-compile-schemas /usr/share/glib-2.0/schemas/ > /dev/null 2>&1 || true
 
 echo "=============================================================================="
 echo " ¡Instalación completa! El sistema se ha configurado con éxito y está listo para reiniciar."

@@ -52,7 +52,7 @@ Este script automatiza a pós-instalação do Void Linux, transformando uma inst
 - **Bulky (Renomeador em Massa)**: Instala o renomeador do Linux Mint no Void via `xdeb`, incluindo as dependências Python (`python3-setproctitle`, `python3-Unidecode`) e a compilação dos schemas do GLib.
 - **Configuração Inteligente do GRUB**: etapa interativa para decidir se deseja pular o menu de inicialização (útil para notebooks com tecla fantasma), plano de fundo personalizado e `grub-mkconfig` como fallback.
 - **Localização e Teclado**: `pt_BR.UTF-8`, layout ABNT2 e pacote de idioma pt-BR para o Firefox.
-- **Drivers de Vídeo e Jogos**: opção interativa para os drivers NVIDIA com bibliotecas de 32 bits + dependências da Steam.
+- **Drivers de Vídeo e Jogos**: detecção automática de GPUs NVIDIA — a opção dos drivers proprietários só aparece quando há uma NVIDIA no sistema; as bibliotecas de 32 bits para o Steam são uma pergunta independente (instaláveis mesmo sem NVIDIA).
 - **Customizações**:
   - Temas, ícones e cursores do Linux Mint (`Mint-Y-Dark`).
   - `xfce4-terminal` com transparência e estilo próprio (opcional, interativo).
@@ -108,7 +108,7 @@ This script automates the post-installation of Void Linux, turning a pure text i
 - **Bulky (Bulk Renamer)**: Installs the Linux Mint bulk renamer on Void via `xdeb`, including Python dependencies (`python3-setproctitle`, `python3-Unidecode`) and GLib schema compilation.
 - **Smart GRUB Configuration**: Interactive step to decide whether to skip the boot menu (useful for laptops with ghost-key firmware issues), custom background, and `grub-mkconfig` fallback.
 - **Localization and Keyboard**: `en_US.UTF-8`, US keyboard layout, and the English US Firefox language pack.
-- **Video Drivers and Gaming**: Interactive option for proprietary NVIDIA drivers with 32-bit libraries + Steam dependencies.
+- **Video Drivers and Gaming**: Automatic NVIDIA GPU detection — the proprietary driver option only appears when an NVIDIA GPU is present; the 32-bit libraries for Steam are a separate question (installable even without NVIDIA).
 - **Customizations**:
   - Linux Mint themes, icons, and cursors (`Mint-Y-Dark`).
   - `xfce4-terminal` transparency and visual style (optional, interactive).
@@ -164,7 +164,7 @@ Este script automatiza la posinstalación de Void Linux, transformando una insta
 - **Bulky (Renombrador Masivo)**: Instala el renombrador de Linux Mint en Void vía `xdeb`, incluyendo las dependencias Python (`python3-setproctitle`, `python3-Unidecode`) y la compilación de los schemas de GLib.
 - **Configuración Inteligente de GRUB**: paso interactivo para decidir si omitir el menú de arranque (útil para portátiles con teclas fantasma), fondo personalizado y `grub-mkconfig` como respaldo.
 - **Localización y Teclado**: `es_ES.UTF-8`, teclado español y paquete de idioma español para Firefox.
-- **Controladores Gráficos y Juegos**: opción interactiva para los controladores NVIDIA con bibliotecas de 32 bits + dependencias de Steam.
+- **Controladores Gráficos y Juegos**: detección automática de GPUs NVIDIA — la opción de los controladores propietarios solo aparece cuando hay una NVIDIA en el sistema; las bibliotecas de 32 bits para Steam son una pregunta independiente (instalables incluso sin NVIDIA).
 - **Personalizaciones**:
   - Temas, iconos y cursores de Linux Mint (`Mint-Y-Dark`).
   - `xfce4-terminal` con transparencia y estilo propio (opcional, interactivo).

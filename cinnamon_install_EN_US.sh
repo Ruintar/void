@@ -22,12 +22,12 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Secure temporary directory for package extraction
+# Secure temporary directory for build/extraction
 TMP_DIR=$(mktemp -d -t void-install-XXXXXX)
 # Traversal permission: xdeb runs as a regular user inside this directory
 chmod 755 "$TMP_DIR"
 
-# Cleanup function executed on exit or interruption (Ctrl+C / Error)
+# Cleanup function executed on exit (Ctrl+C / Error / Normal end)
 cleanup() {
     local exit_code=$?
     echo -e "\nCleaning up temporary files..."
@@ -36,11 +36,10 @@ cleanup() {
         echo "The script was interrupted or encountered an error during execution."
     fi
 }
-# Fix: EXIT only. With INT/TERM the cleanup ran twice on Ctrl+C.
 trap cleanup EXIT
 
-# Runs a command as the real user (xdeb must not run as root)
-# -H: forces the real user's HOME (essential for xdg-mime and xdeb)
+# Run a command as the real user (xdeb and xdg-mime must not run as root).
+# The -H flag ensures the real user's HOME is used.
 run_as_user() {
     if [ "$REAL_USER" != "root" ]; then
         sudo -H -u "$REAL_USER" "$@"
@@ -87,7 +86,7 @@ xbps-install -Syu
 # ------------------------------------------------------------------------------
 # 5. Core Services Installation and Activation
 # ------------------------------------------------------------------------------
-echo "==> Installing essential utilities, network, and authentication tools..."
+echo "==> Installing essential utilities, network, and login tools..."
 xbps-install -y nano NetworkManager polkit gnome-keyring dbus elogind
 
 # Clean removal of conflicting network services
@@ -104,7 +103,7 @@ for svc in NetworkManager dbus elogind; do
     fi
 done
 
-# Laptop Lid Configuration
+# Laptop Configuration (Detection / User prompt)
 clear
 echo "Are you installing on a Desktop or Laptop/Notebook?"
 echo "0) Desktop"
@@ -112,7 +111,7 @@ echo "1) Laptop/Notebook"
 read -r -p "Please select an option [0-1]: " tipo_maquina
 
 if [ "$tipo_maquina" = "1" ]; then
-    echo "Configuring laptop lid switch options in elogind..."
+    echo "Configuring lid switch handling in elogind..."
     sed -i 's/.*HandleLidSwitch=.*/HandleLidSwitch=ignore/' /etc/elogind/logind.conf
     sed -i 's/.*HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=ignore/' /etc/elogind/logind.conf
     sed -i 's/.*HandleLidSwitchDocked=.*/HandleLidSwitchDocked=ignore/' /etc/elogind/logind.conf
@@ -121,25 +120,191 @@ fi
 # ------------------------------------------------------------------------------
 # 6. Audio Server and Bluetooth
 # ------------------------------------------------------------------------------
-echo "==> Installing PipeWire, WirePlumber, RTKit, and Bluetooth support..."
+echo "==> Installing PipeWire, WirePlumber, and Bluetooth support..."
+# rtkit: allows PipeWire to run with real-time priority
 xbps-install -y pipewire wireplumber rtkit pavucontrol pulsemixer libspa-bluetooth blueman bluez-cups
 
 # ------------------------------------------------------------------------------
-# 7. NVIDIA Video Driver (Optional)
+# 7. GPU Detection and Video Drivers (NVIDIA + Steam 32-bit)
 # ------------------------------------------------------------------------------
-clear
-echo "Available NVIDIA drivers:"
-echo "1) Proprietary NVIDIA Driver + 32-bit Support (nvidia nvidia-libs-32bit)"
-echo "0) Skip installation"
-read -r -p "Please select (1 or 0): " opt_nvidia
+# Automatic NVIDIA GPU detection via lspci (works on hybrid Intel + NVIDIA /
+# Optimus laptops). Machines WITHOUT NVIDIA skip this step on their own.
+#
+# The driver family is recommended from the PCI device ID (10de:XXXX),
+# following the Void Linux support table:
+#   nvidia     -> Turing or newer (595, open kernel modules)
+#   nvidia580  -> Maxwell, Pascal and Volta (e.g.: 930MX, GTX 9xx/10xx, 1650)
+#   nvidia470  -> Kepler (GTX 6xx/7xx)
+#   nvidia390  -> Fermi (GeForce 400/500)
+#
+# The chosen package already handles everything else automatically (DKMS
+# module, Nouveau blacklist and initramfs regeneration) via xbps hooks —
+# no manual blacklist/dracut steps are needed.
+# On Optimus laptops, only the NVIDIA GPU gets the driver; the Intel GPU
+# keeps working through the Mesa drivers already included in Xorg.
 
-if [ "$opt_nvidia" = "1" ]; then
-    echo "Installing NVIDIA drivers..."
-    xbps-install -y nvidia nvidia-libs-32bit
+NVIDIA_PKG=""
+
+if command -v lspci >/dev/null 2>&1; then
+    GPU_NVIDIA=$(lspci -d 10de: 2>/dev/null || true)
+    # Classify only display devices (PCI class 03xx: VGA/3D/Display), skipping
+    # the HDA audio function that ships alongside the GPU
+    NVIDIA_IDS=$(lspci -d 10de: -n 2>/dev/null | awk '$2 ~ /^03/ {print $3}' | cut -d: -f2 || true)
+else
+    GPU_NVIDIA=""
+    NVIDIA_IDS=""
 fi
 
-# Steam compatibility and 32-bit libraries
-xbps-install -y libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-dri-32bit
+if [ -n "$GPU_NVIDIA" ]; then
+    clear
+    echo "NVIDIA GPU detected:"
+    echo "$GPU_NVIDIA" | sed 's/^/  /'
+    echo ""
+
+    # Recommend the driver family based on each detected NVIDIA display GPU
+    RECOMMENDED=""
+    MIXED_FAMILIES=0
+    for devid in $NVIDIA_IDS; do
+        # Validate the ID (4 hexadecimal digits)
+        if ! [[ "$devid" =~ ^[0-9a-fA-F]{4}$ ]]; then
+            continue
+        fi
+        devnum=$((16#$devid))
+        if   (( devnum >= 0x1E00 )); then fam="nvidia"      # Turing or newer
+        elif (( devnum >= 0x1D80 )); then fam="nvidia580"   # Volta
+        elif (( devnum >= 0x1B00 )); then fam="nvidia580"   # Pascal
+        elif (( devnum >= 0x1300 )); then fam="nvidia580"   # Maxwell
+        elif (( devnum >= 0x0F00 )); then fam="nvidia470"   # Kepler
+        elif (( devnum >= 0x06C0 )); then fam="nvidia390"   # Fermi
+        else fam="none"                                     # pre-Fermi: Nouveau only
+        fi
+        if [ -z "$RECOMMENDED" ]; then
+            RECOMMENDED="$fam"
+        elif [ "$RECOMMENDED" != "$fam" ]; then
+            MIXED_FAMILIES=1
+        fi
+    done
+
+    echo "NVIDIA drivers available on Void:"
+    echo "  nvidia     (Turing or newer)"
+    echo "  nvidia580  (Maxwell, Pascal, Volta)"
+    echo "  nvidia470  (Kepler)"
+    echo "  nvidia390  (Fermi)"
+    echo ""
+    if [ "$MIXED_FAMILIES" -eq 1 ]; then
+        echo "More than one NVIDIA family was detected — please choose manually."
+        RECOMMENDED=""
+    elif [ "$RECOMMENDED" = "none" ]; then
+        echo "GPU older than Fermi: the proprietary driver does not support it."
+        echo "The free Nouveau driver will be kept."
+        RECOMMENDED=""
+    elif [ -n "$RECOMMENDED" ]; then
+        echo "Detected family — recommended driver: $RECOMMENDED"
+    fi
+    echo ""
+    echo "1) Install the recommended NVIDIA driver + 32-bit support"
+    echo "2) Choose another driver version manually"
+    echo "0) Skip installation (keep Nouveau)"
+
+    while true; do
+        read -r -p "Please select (0, 1 or 2): " opt_nvidia
+        case "$opt_nvidia" in
+            0)
+                echo "NVIDIA driver installation skipped."
+                NVIDIA_PKG=""
+                break
+                ;;
+            1)
+                if [ -z "$RECOMMENDED" ]; then
+                    echo "No driver could be recommended automatically."
+                    echo "Choose manually (option 2) or skip the installation (option 0)."
+                else
+                    NVIDIA_PKG="$RECOMMENDED"
+                    break
+                fi
+                ;;
+            2)
+                while true; do
+                    echo "Available versions:"
+                    echo "1) nvidia     (Turing or newer)"
+                    echo "2) nvidia580  (Maxwell, Pascal, Volta)"
+                    echo "3) nvidia470  (Kepler)"
+                    echo "4) nvidia390  (Fermi)"
+                    read -r -p "Please select (1-4): " opt_familia
+                    case "$opt_familia" in
+                        1) NVIDIA_PKG="nvidia"; break ;;
+                        2) NVIDIA_PKG="nvidia580"; break ;;
+                        3) NVIDIA_PKG="nvidia470"; break ;;
+                        4) NVIDIA_PKG="nvidia390"; break ;;
+                        *) echo "Invalid option! Type a number between 1 and 4." ;;
+                    esac
+                done
+                break
+                ;;
+            *)
+                echo "Invalid option! Type 0, 1 or 2."
+                ;;
+        esac
+    done
+
+    if [ -n "$NVIDIA_PKG" ]; then
+        echo "Installing the NVIDIA driver ($NVIDIA_PKG) + 32-bit libraries..."
+        xbps-install -y "$NVIDIA_PKG" "${NVIDIA_PKG}-libs-32bit"
+    fi
+elif [ ! -e /proc/cmdline ] || ! command -v lspci >/dev/null 2>&1; then
+    # Fallback: without pciutils there is no automatic detection — old-style prompt
+    clear
+    echo "Notice: the lspci command was not found (pciutils package)."
+    echo "Automatic GPU detection is unavailable in this run."
+    echo "Do you want to install the NVIDIA driver anyway?"
+    echo "1) Proprietary NVIDIA Driver + 32-bit Support (nvidia nvidia-libs-32bit)"
+    echo "0) Skip installation"
+    while true; do
+        read -r -p "Please select (1 or 0): " opt_nvidia
+        case "$opt_nvidia" in
+            1) NVIDIA_PKG="nvidia"; break ;;
+            0) echo "NVIDIA driver installation skipped."; break ;;
+            *) echo "Invalid option! Type 1 or 0." ;;
+        esac
+    done
+    if [ -n "$NVIDIA_PKG" ]; then
+        echo "Installing the NVIDIA driver ($NVIDIA_PKG) + 32-bit libraries..."
+        xbps-install -y "$NVIDIA_PKG" "${NVIDIA_PKG}-libs-32bit"
+    fi
+else
+    clear
+    echo "No NVIDIA GPU detected — the NVIDIA driver step was skipped."
+    echo "(Intel and AMD GPUs use the Mesa drivers installed ahead.)"
+fi
+
+# ------------------------------------------------------------------------------
+# 32-bit components for Steam compatibility (independent prompt)
+# ------------------------------------------------------------------------------
+# Asked to ALL users, regardless of the GPU or chosen driver:
+#   - AMD/Intel/Nouveau: these libraries are the 32-bit support for Steam and
+#     32-bit games (Mesa/GLVnd).
+#   - Proprietary NVIDIA: the driver's own 32-bit libraries were installed
+#     above; the packages below complement the environment (gcc, libstdc++, drm).
+clear
+echo "Do you want to install the 32-bit components for Steam compatibility?"
+echo "(libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-dri-32bit)"
+
+opt_steam32=""
+while true; do
+    read -r -p "Please select (1 = Yes / 0 = No): " input_steam
+    case "$input_steam" in
+        1) opt_steam32="yes"; break ;;
+        0) opt_steam32="no"; break ;;
+        *) echo "Invalid option! Type 1 for Yes or 0 for No." ;;
+    esac
+done
+
+if [ "$opt_steam32" = "yes" ]; then
+    echo "Installing 32-bit components for Steam..."
+    xbps-install -y libgcc-32bit libstdc++-32bit libdrm-32bit libglvnd-32bit mesa-dri-32bit
+else
+    echo "Steam 32-bit components will not be installed."
+fi
 
 # ------------------------------------------------------------------------------
 # 8. Cinnamon Desktop Environment and System Tools
@@ -149,11 +314,11 @@ xbps-install -y xorg octoxbps cinnamon-all xdg-desktop-portal xdg-desktop-portal
                 xdg-user-dirs xdg-user-dirs-gtk xdg-utils wget binutils xz hicolor-icon-theme
 
 # Nemo (Cinnamon default) + File Roller and RAR archive support
-# (including password-protected via unrar) and 7-Zip, integrated into Nemo
-echo "==> Installing Nemo, File Roller and compression support (RAR/7Zip)..."
+# (including password-protected files, via unrar) and 7-Zip, with Nemo integration
+echo "==> Installing Nemo, File Roller, and compression support (RAR/7Zip)..."
 xbps-install -y nemo file-roller nemo-fileroller unrar p7zip
 
-# Ensures Nemo is the user's default file manager
+# Guarantees Nemo as the user's default file manager
 run_as_user xdg-mime default nemo.desktop inode/directory application/x-gnome-saved-search
 
 # Cinnamon Spices.py Patch
@@ -173,10 +338,13 @@ if old_code in content:
 fi
 
 # Printer Support and Filesystems
-echo "==> Installing printer support and additional tools..."
+echo "==> Installing printer support and filesystem tools..."
+# gnome-disk-utility: GNOME Disks (disk management)
+# gnome-screenshot: used by the Cinnamon Print key
 xbps-install -y cups cups-filters gutenprint system-config-printer \
+                gnome-disk-utility gnome-screenshot \
                 exfat-utils fuse-exfat gvfs-afc gvfs-mtp gvfs-smb udisks2 ntfs-3g gptfdisk bluez GPaste \
-                gnome-disk-utility topgrade noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
+                topgrade noto-fonts-cjk noto-fonts-emoji noto-fonts-ttf noto-fonts-ttf-extra
 
 for svc in cupsd bluetoothd; do
     if [ ! -L "/var/service/$svc" ]; then
@@ -187,7 +355,7 @@ done
 # User Applications
 echo "==> Installing user software..."
 xbps-install -y firefox xfce4-terminal firefox-i18n-en-US gnome-calendar qalculate-gtk \
-                smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx gnome-screenshot
+                smplayer qt5-styleplugins qt5ct qt6ct flameshot fastfetch numlockx
 
 if ! grep -q "^QT_QPA_PLATFORMTHEME=" /etc/environment; then
     echo "QT_QPA_PLATFORMTHEME=qt5ct" >> /etc/environment
@@ -252,7 +420,9 @@ BULKY_DIR="$TMP_DIR/bulky-build"
 mkdir -p "$BULKY_DIR"
 chown -R "$REAL_USER:$REAL_USER" "$BULKY_DIR"
 
-# Download the Bulky .deb and xdeb (HTTPS)
+# Download of the Bulky .deb and xdeb
+# NOTICE: the packages.linuxmint.com HTTP URL is INTENTIONAL — HTTPS on this
+# host fails the wget/curl handshake in this environment. Do not switch to HTTPS.
 run_as_user bash -c "
     set -e
     cd '$BULKY_DIR'
@@ -263,27 +433,27 @@ run_as_user bash -c "
     chmod +x xdeb
 "
 
-# Make xdeb global
+# Makes xdeb globally available
 mv "$BULKY_DIR/xdeb" /usr/local/bin/xdeb
 
-# Convert the .deb into an xbps package (generates the local 'binpkgs' repository)
+# Converts the .deb into an xbps package (generates the xdeb local 'binpkgs' repo)
 echo "Converting Bulky (.deb -> xbps) with xdeb..."
 run_as_user bash -c "cd '$BULKY_DIR' && xdeb -Sedf bulky_4.2_all.deb"
 
-# Install the converted package from the local repository generated by xdeb
+# Installs the converted package from the local repository generated by xdeb
 if compgen -G "$BULKY_DIR/binpkgs/bulky-*.xbps" > /dev/null; then
-    echo "Installing converted package..."
+    echo "Installing the converted package..."
     xbps-install -y -R "$BULKY_DIR/binpkgs" -i bulky
 else
     echo "Error: xdeb did not generate the Bulky package in $BULKY_DIR/binpkgs." >&2
     exit 1
 fi
 
-# Python dependencies for Bulky (via xbps, no pip)
+# Python dependencies of Bulky (via xbps, no pip)
 echo "Installing Python dependencies (python3-setproctitle, python3-Unidecode)..."
 xbps-install -y python3-setproctitle python3-Unidecode
 
-# Compile GLib schemas so the 'org.x.bulky' schema is recognized
+# Compiles the GLib schemas so the 'org.x.bulky' schema is recognized
 echo "Compiling GLib schemas..."
 glib-compile-schemas /usr/share/glib-2.0/schemas/
 
@@ -306,6 +476,8 @@ EOF
 echo "==> Downloading and installing Linux Mint themes, icons, and cursors..."
 mkdir -p "$REAL_HOME/.themes" "$REAL_HOME/.icons"
 
+# NOTICE: the packages.linuxmint.com HTTP URL is INTENTIONAL — HTTPS on this
+# host fails the wget/curl handshake in this environment. Do not switch to HTTPS.
 download_and_extract_deb() {
     local url="$1"
     local pkg_name
@@ -318,8 +490,6 @@ download_and_extract_deb() {
     tar -xf data.tar.xz --wildcards --no-anchored 'usr/share/*'
 }
 
-# WARNING: packages.linuxmint.com does NOT reliably serve .debs over HTTPS
-# (wget/curl fail the handshake). HTTP here is INTENTIONAL — do not change.
 download_and_extract_deb "http://packages.linuxmint.com/pool/main/m/mint-themes/mint-themes_2.4.2_all.deb"
 if [ -d "$TMP_DIR/usr/share/themes" ]; then
     cp -r "$TMP_DIR/usr/share/themes/"* "$REAL_HOME/.themes/"
@@ -340,9 +510,9 @@ fi
 
 chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.themes" "$REAL_HOME/.icons"
 
-# User Initialization Script
-# set -e: the autostart entry below only removes itself if ALL settings
-# apply successfully (otherwise it retries on the next login)
+# User initialization script
+# (applies keyboard, themes and clock on first login; no ghost keys —
+#  the clock applet format is handled by the repair block below)
 cat <<EOL > "$REAL_HOME/set-keyboard.sh"
 #!/bin/bash
 set -e
@@ -364,60 +534,6 @@ EOL
 
 chmod +x "$REAL_HOME/set-keyboard.sh"
 chown "$REAL_USER:$REAL_USER" "$REAL_HOME/set-keyboard.sh"
-
-# Stacked clock format (calendar@cinnamon.org applet)
-# The applet does not read global keys nor a fixed-name JSON: each instance has
-# its own "<instance-id>.json" generated from settings-schema.json.
-# Dual strategy: (1) patch the global schema for fresh installations;
-# (2) fix instances already created (re-runs / reused home).
-# The format uses a REAL LINE BREAK between time and date (that is how the
-# Cinnamon GUI saves it when pasting a two-line format): Python's json.dump
-# serializes it as "\n", which the applet renders as two lines in the panel.
-# Result:     %H:%M:%S   (on top, with seconds)
-#             %m/%d/%Y   (below)
-
-# 1) Global applet schema (affects only instances not yet created)
-CAL_SCHEMA="/usr/share/cinnamon/applets/calendar@cinnamon.org/settings-schema.json"
-if [ -f "$CAL_SCHEMA" ]; then
-    python3 - "$CAL_SCHEMA" << 'PYEOF'
-import json, sys
-path = sys.argv[1]
-with open(path) as f:
-    schema = json.load(f)
-if isinstance(schema.get("use-custom-format"), dict):
-    schema["use-custom-format"]["default"] = True
-if isinstance(schema.get("custom-format"), dict):
-    schema["custom-format"]["default"] = "%H:%M:%S\n%m/%d/%Y"
-with open(path, "w") as f:
-    json.dump(schema, f, indent=4)
-PYEOF
-fi
-
-# 2) Already-created instances (e.g.: re-installations over the same /home)
-CAL_SPICES="$REAL_HOME/.config/cinnamon/spices/calendar@cinnamon.org"
-if [ -d "$CAL_SPICES" ]; then
-    python3 - "$CAL_SPICES" << 'PYEOF'
-import glob, json, sys
-for path in glob.glob(sys.argv[1] + "/*.json"):
-    try:
-        with open(path) as f:
-            data = json.load(f)
-    except Exception:
-        continue
-    changed = False
-    if isinstance(data.get("use-custom-format"), dict):
-        data["use-custom-format"]["value"] = True
-        changed = True
-    if isinstance(data.get("custom-format"), dict):
-        data["custom-format"]["value"] = "%H:%M:%S\n%m/%d/%Y"
-        changed = True
-    if changed:
-        # __md5__ stays as is: an old checksum signals external editing
-        # and makes the applet reload values from disk.
-        with open(path, "w") as f:
-            json.dump(data, f, indent=4)
-PYEOF
-fi
 
 # Autostart Entries
 AUTOSTART_DIR="$REAL_HOME/.config/autostart"
@@ -472,12 +588,69 @@ X-GNOME-Autostart-enabled=true
 Name=GPaste Daemon
 EOL
 
+chown -R "$REAL_USER:$REAL_USER" "$AUTOSTART_DIR"
+
 # ------------------------------------------------------------------------------
-# CRITICAL FIX: ~/.config ownership
-# This script runs as root and the mkdir -p calls above may have created
-# ~/.config as root:root. Without the user owning it, dconf cannot write and
-# ALL gsettings (theme, background, icons, keyboard) fail silently.
+# Clock format repair (calendar@cinnamon.org applet)
 # ------------------------------------------------------------------------------
+# The clock applet stores its settings in JSON files:
+#   1) Fresh installs: defaults come from the applet's global settings-schema.json.
+#   2) Re-runs: per-instance JSONs already exist under
+#      ~/.config/cinnamon/spices/calendar@cinnamon.org/ and must be fixed.
+# In both cases we apply the two-line format (time/seconds on top,
+# date below) with a real newline. The __md5__ is left untouched — the old
+# checksum makes the applet reload the values from disk instead of resetting
+# the schema.
+
+REAL_HOME="$REAL_HOME" python3 - <<'PYEOF'
+import glob, json, os
+
+REAL_HOME = os.environ.get('REAL_HOME', '')
+FORMAT = "%H:%M:%S\n%m/%d/%Y"
+
+# 1) Global applet schema (affects fresh installs and new instances)
+schema_path = '/usr/share/cinnamon/applets/calendar@cinnamon.org/settings-schema.json'
+if os.path.isfile(schema_path):
+    with open(schema_path, 'r', encoding='utf-8') as f:
+        schema = json.load(f)
+    changed = False
+    for key, item in schema.items():
+        if key == '__md5__' or not isinstance(item, dict):
+            continue
+        if key == 'use-custom-format':
+            item['default'] = True
+            changed = True
+        elif key == 'custom-format':
+            item['default'] = FORMAT
+            changed = True
+    if changed:
+        with open(schema_path, 'w', encoding='utf-8') as f:
+            json.dump(schema, f, indent=4, ensure_ascii=False)
+
+# 2) Existing instances (script re-runs)
+if REAL_HOME:
+    spice_dir = os.path.join(REAL_HOME, '.config/cinnamon/spices/calendar@cinnamon.org')
+    for path in glob.glob(os.path.join(spice_dir, '*.json')):
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        changed = False
+        if isinstance(data.get('use-custom-format'), dict):
+            data['use-custom-format']['value'] = True
+            changed = True
+        if isinstance(data.get('custom-format'), dict):
+            data['custom-format']['value'] = FORMAT
+            changed = True
+        if changed:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+PYEOF
+
+# ------------------------------------------------------------------------------
+# Critical ownership guarantee for ~/.config
+# ------------------------------------------------------------------------------
+# The script runs as root: without this chown, files created inside ~/.config
+# in this section end up root:root and dconf/Cinnamon fails silently
+# (theme, wallpaper, icons and keyboard never persist in the session).
 chown -R "$REAL_USER:$REAL_USER" "$REAL_HOME/.config"
 
 # ------------------------------------------------------------------------------
@@ -488,6 +661,13 @@ xbps-install -y lightdm lightdm-gtk-greeter lightdm-gtk-greeter-settings
 
 if [ ! -L "/var/service/lightdm" ]; then
     ln -s /etc/sv/lightdm/ /var/service/
+fi
+
+# PAM: unlocks the gnome-keyring together with the LightDM login
+# (fixes the "keyringPrompt: Failed to show modal dialog" error)
+if ! grep -q "pam_gnome_keyring" /etc/pam.d/lightdm; then
+    echo "auth       optional    pam_gnome_keyring.so" >> /etc/pam.d/lightdm
+    echo "session    optional    pam_gnome_keyring.so auto_start" >> /etc/pam.d/lightdm
 fi
 
 cat << 'EOF' > /etc/lightdm/lightdm-gtk-greeter.conf
@@ -510,13 +690,6 @@ cat << 'EOF' > /etc/lightdm/lightdm.conf.d/60-custom-greeter.conf
 greeter-setup-script=/usr/local/bin/lightdm-greeter-setup.sh
 EOF
 
-# Automatic keyring (gnome-keyring) unlock at login via PAM
-# Fixes the "keyringPrompt: Failed to show modal dialog" error in .xsession-errors
-if [ -f /etc/pam.d/lightdm ] && ! grep -q pam_gnome_keyring /etc/pam.d/lightdm; then
-    sed -i '0,/^auth.*/s//&\nauth        optional    pam_gnome_keyring.so/' /etc/pam.d/lightdm
-    printf '%s\n' 'session     optional    pam_gnome_keyring.so auto_start' >> /etc/pam.d/lightdm
-fi
-
 # Pipewire Autostart Config
 mkdir -p /etc/pipewire/pipewire.conf.d
 [ -f /usr/share/examples/wireplumber/10-wireplumber.conf ] && ln -sf /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pipewire.conf.d/
@@ -530,7 +703,7 @@ echo "==> Configuring GRUB..."
 sed -i 's/.*GRUB_BACKGROUND=.*/GRUB_BACKGROUND="\/usr\/share\/void-artwork\/splash.png"/' /etc/default/grub
 
 clear
-echo "Do you want to skip GRUB countdown and boot automatically?"
+echo "Do you want to skip the GRUB countdown and boot automatically?"
 echo "Notice: If you use a laptop and it has a ghost key / firmware issue,"
 echo "and you do not want to confirm the boot entry every time,"
 echo "it is necessary to apply this change to skip the menu."
@@ -571,8 +744,8 @@ if [ -f "$SCRIPT_DIR/10-mount-drives.rules" ]; then
     cp "$SCRIPT_DIR/10-mount-drives.rules" /etc/polkit-1/rules.d/
 fi
 
-# Final safeguard: ensures GLib schemas (including org.x.bulky) remain
-# compiled, in case a package installed later regenerated the cache
+# Final guarantee: makes sure the GLib schemas (including org.x.bulky) stay
+# compiled, in case a package installed afterwards regenerated the cache
 glib-compile-schemas /usr/share/glib-2.0/schemas/ > /dev/null 2>&1 || true
 
 echo "=============================================================================="

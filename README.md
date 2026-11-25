@@ -8,7 +8,10 @@
 
 ---
 
-# <a id="português-pt-br"></a>🇧🇷 Script de Instalação do Void Linux com Cinnamon
+<details name="idiomas" open>
+<summary><a id="português-pt-br"></a>🇧🇷 PT-BR</summary>
+
+# 🇧🇷 Script de Instalação do Void Linux com Cinnamon
 
 Este script automatiza a pós-instalação do Void Linux, transformando uma instalação em modo texto puro em um sistema desktop completo, moderno e otimizado com o ambiente gráfico Cinnamon.
 
@@ -62,9 +65,14 @@ Este script automatiza a pós-instalação do Void Linux, transformando uma inst
 ## Feedback
 Sugestões, correções e melhorias são sempre muito bem-vindas! 😊
 
+</details>
+
 ---
 
-# <a id="english-en-us"></a>🇺🇸 Void Linux Cinnamon Installation Script
+<details name="idiomas">
+<summary><a id="english-en-us"></a>🇺🇸 EN-US</summary>
+
+# 🇺🇸 Void Linux Cinnamon Installation Script
 
 This script automates the post-installation of Void Linux, turning a pure text installation into a full, modern, and optimized desktop environment powered by the Cinnamon graphical environment.
 
@@ -118,9 +126,14 @@ This script automates the post-installation of Void Linux, turning a pure text i
 ## Feedback
 Suggestions, corrections, and improvements are always welcome! 😊
 
+</details>
+
 ---
 
-# <a id="español-es-es"></a>🇪🇸 Script de Instalación de Void Linux con Cinnamon
+<details name="idiomas">
+<summary><a id="español-es-es"></a>🇪🇸 ES-ES</summary>
+
+# 🇪🇸 Script de Instalación de Void Linux con Cinnamon
 
 Este script automatiza la posinstalación de Void Linux, transformando una instalación en modo texto puro en un entorno de escritorio completo, moderno y optimizado con el entorno gráfico Cinnamon.
 
@@ -173,3 +186,5 @@ Este script automatiza la posinstalación de Void Linux, transformando una insta
 
 ## Feedback
 ¡Sugerencias, correcciones y mejoras son siempre bienvenidas! 😊
+
+</details>
